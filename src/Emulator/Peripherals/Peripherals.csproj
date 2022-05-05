@@ -63,6 +63,7 @@
     <Compile Include="Peripherals\Miscellaneous\DRA78x_System_Mmu.cs" />
     <Compile Include="Peripherals\Miscellaneous\MultiCore_CPU_ID.cs" />
     <Compile Include="Peripherals\Miscellaneous\MultiCore_NVIC.cs" />
+    <Compile Include="Peripherals\Miscellaneous\PeriodicInterrupt.cs" />
     <Compile Include="Peripherals\Network\DRA78x_Eth.cs" />
     <Compile Include="Peripherals\Sensors\HFDA801x.cs" />
     <Compile Include="Peripherals\Sensors\PCM6xx0.cs" />
