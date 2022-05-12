@@ -167,17 +167,9 @@ namespace Antmicro.Renode.Peripherals.Network
             {
                 if (frame.UnderlyingPacket.Type == PacketDotNet.EthernetPacketType.PrecisionTimeProtocol)
                 {
-                    wr_c0_misc_stat.Value = 0x10;    // Misc Interrupt Source for Events
-//                    cpts_event_type.Value = 0x04;    // Eventtype
-//                    cpts_port_number.Value = 1;      // PortNumber
-//                    cpts_message_type.Value = (uint)frame.Bytes[14] & 0x000F;  // MessageType
-//                    cpts_sequence_id.Value = ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]); // sequence id
-                    PushCptsData(0x04, 1, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]), 0x00);
-
                     if (ts_pend_enable.Value)
                     {
-                        IRQ.Set();
-                        IRQ.Unset();
+                        PushCptsData(0x10, 0x04, 1, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]), 0x00);
                         this.Log(LogLevel.Noisy, "Generate IRQ Rx");
                     }
                 }
@@ -233,13 +225,7 @@ namespace Antmicro.Renode.Peripherals.Network
 
             if ((value == true) && (number == 0))
             {
-                lock (cptsLock)
-                {
-//                    wr_c0_misc_stat.Value = 0x10;
-//                    PushCptsData(0x03, 0x00, 0x00, 0x00, 0x00);
-//                    IRQ.Set();
-//                    IRQ.Unset();
-                }
+//                    PushCptsData(0x10, 0x03, 0x00, 0x00, 0x00, 0x00);
             }
 
         }
@@ -278,16 +264,11 @@ namespace Antmicro.Renode.Peripherals.Network
         private IValueRegisterField[] rx_cp = new IValueRegisterField[8];
         private uint[] RxDescriptorAdr = new uint[8];
         private IValueRegisterField wr_c0_misc_stat;
-//        private IValueRegisterField cpts_event_low;
-//        private IValueRegisterField cpts_sequence_id;
-//        private IValueRegisterField cpts_message_type;
-//        private IValueRegisterField cpts_event_type;
-//        private IValueRegisterField cpts_port_number;
+
         private IValueRegisterField ts_ltype1;
         private IValueRegisterField ts_ltype2;
         private IValueRegisterField vlan_ltype1;
         private IValueRegisterField vlan_ltype2;
- //       private IValueRegisterField cpdma_eoi_vector;
         private IFlagRegisterField ts_pend_enable;
         private Machine mach;
 
@@ -296,19 +277,27 @@ namespace Antmicro.Renode.Peripherals.Network
 
 
 
-        private void PushCptsData(uint eventtype, uint portnumber, uint messagetype, uint sequenceid, uint timestamp)
+        private void PushCptsData(uint interruptsource, uint eventtype, uint portnumber, uint messagetype, uint sequenceid, uint timestamp)
         {
             uint DataHigh = 0x00;
+
 
             DataHigh = portnumber << 24;
             DataHigh |= eventtype << 20;
             DataHigh |= messagetype << 16;
             DataHigh |= sequenceid;
 
+            lock (cptsLock)
+            {
+
             cptsHighQueue.Enqueue(DataHigh);
             cptsLowQueue.Enqueue(timestamp);
             this.Log(LogLevel.Noisy, "CPTS  event:{0:X} type:{1:X} port:{2} sequence:{3} time:{4}", eventtype, messagetype, portnumber, sequenceid, timestamp);
 
+                wr_c0_misc_stat.Value = interruptsource;    // Misc Interrupt Source for Events
+                IRQ.Set();
+                IRQ.Unset();
+            }
         }
 
 
@@ -323,11 +312,6 @@ namespace Antmicro.Renode.Peripherals.Network
             }
         }
 
-        private void UpdateInterrupts()
-        {
-            //            IRQ.Set(true);
-            //            IRQ.Set(false);
-        }
 
         public TxBufferDescriptor GetNextTxDescriptor(int ChannelIndex, TxBufferDescriptor CurrentDescriptor)
         {
@@ -344,17 +328,10 @@ namespace Antmicro.Renode.Peripherals.Network
         {
             if (frame.UnderlyingPacket.Type == PacketDotNet.EthernetPacketType.PrecisionTimeProtocol)
             {
-                wr_c0_misc_stat.Value = 0x10;    // Misc Interrupt Source for Events
-//                cpts_event_type.Value = 0x05;    // Eventtype
-//                cpts_port_number.Value = port;   // PortNumber
-//                cpts_message_type.Value = (uint)frame.Bytes[14] & 0x000F ;  // MessageType
-//                cpts_sequence_id.Value = ( (uint) frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]) ; // sequence id
                 if (ts_pend_enable.Value)
                 {
-                    PushCptsData(0x05, port, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]), 0x00);
-                    IRQ.Set();
-                    IRQ.Unset();
-//                    this.Log(LogLevel.Noisy, "Generate IRQ Tx");
+                    PushCptsData(0x10, 0x05, port, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]), 0x00);
+                    this.Log(LogLevel.Noisy, "Generate IRQ Tx");
                 }
             }
             FrameReady?.Invoke(frame);
