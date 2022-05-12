@@ -79,7 +79,11 @@ namespace Antmicro.Renode.Peripherals.Network
         public uint ReadDoubleWord(long offset)
         {
             if (offset >= BASE_MESSAGEADR)
+            {
+                if (rxQueue.Count > 1)
+                    CopyRxFrame();
                 return messagememory.ReadDoubleWord(offset - BASE_MESSAGEADR);
+            }
             else
 
                 return dwordregisters.Read(offset);
@@ -114,10 +118,10 @@ namespace Antmicro.Renode.Peripherals.Network
             return null;
         }
 
-        public void CopyRxFrame(EthernetFrame frame)
+        public void CopyRxFrame()
         {
 
-            frame = rxQueue.Dequeue();
+            EthernetFrame frame = rxQueue.Peek();
             int ChannelIndex = 1;
 
             if (frame.UnderlyingPacket.Type == PacketDotNet.EthernetPacketType.PrecisionTimeProtocol)
@@ -165,6 +169,7 @@ namespace Antmicro.Renode.Peripherals.Network
 
             if (OverrunError == false)
             {
+                rxQueue.Dequeue();         // remove processed frame
                 if (frame.UnderlyingPacket.Type == PacketDotNet.EthernetPacketType.PrecisionTimeProtocol)
                 {
                     if (ts_pend_enable.Value)
@@ -204,8 +209,11 @@ namespace Antmicro.Renode.Peripherals.Network
 
         public void ReceiveFrame(EthernetFrame frame)
         {
-            rxQueue.Enqueue(frame);
-            CopyRxFrame(frame);
+            if (cpdma_rx_enabled.Value)
+            {
+                rxQueue.Enqueue(frame);
+                CopyRxFrame();
+            }
         }
 
 
@@ -270,6 +278,8 @@ namespace Antmicro.Renode.Peripherals.Network
         private IValueRegisterField vlan_ltype1;
         private IValueRegisterField vlan_ltype2;
         private IFlagRegisterField ts_pend_enable;
+        private IFlagRegisterField cpdma_tx_enabled;
+        private IFlagRegisterField cpdma_rx_enabled;
         private Machine mach;
 
         private IValueRegisterField entry_pointer_idx;
@@ -414,9 +424,11 @@ namespace Antmicro.Renode.Peripherals.Network
                 .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.CPDMA_TX_CONTROL.Define(dwordregisters, 0x00, "CPDMA_TX_CONTROL")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithFlag(0, out cpdma_tx_enabled, FieldMode.Read | FieldMode.Write, name: "TX_EN")
+                .WithValueField(1, 31, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.CPDMA_RX_CONTROL.Define(dwordregisters, 0x00, "CPDMA_RX_CONTROL")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithFlag(0, out cpdma_rx_enabled, FieldMode.Read | FieldMode.Write, name: "TX_EN")
+                .WithValueField(1, 31, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.SL1_MACCONTROL.Define(dwordregisters, 0x00, "SL1_MACCONTROL")
                  .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
