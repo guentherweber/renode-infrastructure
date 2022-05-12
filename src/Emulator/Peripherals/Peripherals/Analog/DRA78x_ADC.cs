@@ -20,32 +20,38 @@ namespace Antmicro.Renode.Peripherals.Analog
     public class DRA78x_ADC : BasicDoubleWordPeripheral, IKnownSize, IWordPeripheral, IBytePeripheral
     {
 
-        private const int NumberOfADCs = 16;
+        private const int NumberOfADCs = 8;
+        private const int NumberOfSteps = 16;
 
         private IFlagRegisterField bEND_OF_SEQUENCE;
         private IFlagRegisterField bADC_MODULE_ENABLE;
         private IValueRegisterField vADC_STEPENABLE;
-
-
-        //            private IValueRegisterField vADC_CTRL;
-
-        private List<ushort> adc_values;
-        private List<Boolean> adc_active;
-        private int CurrentStep = 0;
+        private IValueRegisterField[] Mode = new IValueRegisterField[NumberOfSteps];
+        private IFlagRegisterField[]  Fifo = new IFlagRegisterField[NumberOfSteps];
+        private IFlagRegisterField StepIdTag;
+        private Queue<uint> AdcQueue0;
+        private Queue<uint> AdcQueue1;
+        private List<uint> adc_values;
+        private List<Boolean> step_enable;
 
         public DRA78x_ADC(Machine machine) : base(machine)
         {
             IRQ = new GPIO();
 
             // Create a list of adc values
-            adc_values = new List<ushort>();
-            adc_active = new List<Boolean>();
+            adc_values = new List<uint>();
+            step_enable = new List<Boolean>();
 
             for (int i=0; i < NumberOfADCs; i++)
             {
                 adc_values.Add(0x0000);
-                adc_active.Add(false);
             }
+            for (int i = 0; i < NumberOfSteps; i++)
+            {
+                step_enable.Add(false);
+            }
+            AdcQueue0 = new Queue<uint>();
+            AdcQueue1 = new Queue<uint>();
 
             DefineRegisters();
         }
@@ -70,6 +76,7 @@ namespace Antmicro.Renode.Peripherals.Analog
                                             writeCallback: (_, value) =>
                                             {
                                                 bEND_OF_SEQUENCE.Value = true;
+                                                this.Log(LogLevel.Noisy, "END_OF_SEQUENCE {0}", bEND_OF_SEQUENCE.Value);
                                                 UpdateInterrupts();
                                             }, name: "END_OF_SEQUENCE Interrupt Enable Set")
                 .WithTag("Reserved", 2, 30);
@@ -81,6 +88,7 @@ namespace Antmicro.Renode.Peripherals.Analog
                             if (value == true)
                             {
                                 bEND_OF_SEQUENCE.Value = false;
+                                this.Log(LogLevel.Noisy, "END_OF_SEQUENCE {0}", bEND_OF_SEQUENCE.Value);
                                 UpdateInterrupts();
                             }
                         }, name: "END_OF_SEQUENCE Interrupt Enable Clear")
@@ -93,18 +101,21 @@ namespace Antmicro.Renode.Peripherals.Analog
                 .WithTag("Reserved", 0, 32);
 
             Register.ADC_CTRL.Define(this, 0x00, "ADC_CTRL")
-                .WithFlag(0, out bADC_MODULE_ENABLE, FieldMode.Read | FieldMode.Set, 
+                .WithFlag(0, out bADC_MODULE_ENABLE, FieldMode.Read | FieldMode.Write, 
                         writeCallback: (_, value) =>
                         {
-                            CurrentStep = 0;
                             bADC_MODULE_ENABLE.Value = value;
+                            this.Log(LogLevel.Noisy, "ADC Module Enable {0}", value);
                             UpdateInterrupts();
                         }, name: "adc module enabled")
-                .WithValueField(1,31, FieldMode.Read | FieldMode.Write, name:"Reserved");
+                .WithFlag(1, out StepIdTag, FieldMode.Read | FieldMode.Write, name: "STEP_ID_TAG")
+                .WithValueField(2,30, FieldMode.Read | FieldMode.Write, name:"Reserved");
 
             Register.ADC_ADCSTAT.Define(this, 0x00000010, "ADC_ADCSTAT")
-                .WithTag("Reserved", 0, 32);
-            Register.ADC_ADCRANGE.Define(this, 0x00, "ADC_ADCRANGE")
+                .WithValueField(0, 32, FieldMode.Read, name: "Reserved");
+
+
+            Register.ADC_ADCRANGE.Define(this, 0x00,  "ADC_ADCRANGE")
                 .WithTag("Reserved", 0, 32);
             Register.ADC_CLKDIV.Define(this, 0x00, "ADC_CLKDIV")
                 .WithTag("Reserved", 0, 32);
@@ -116,12 +127,18 @@ namespace Antmicro.Renode.Peripherals.Analog
                         writeCallback: (_, value) =>
                         {
                             uint channelbits = 0x0001;
-                            for (ushort i = 0; i < NumberOfADCs; i++)
+                            for (int i = 0; i < NumberOfSteps; i++)
                             {
                                 if ((channelbits & value) != 0x0000)
-                                    adc_active[i] = true;
+                                {
+                                    step_enable[i] = true;
+                                    this.Log(LogLevel.Noisy, "step  {0} enable", i);
+                                }
                                 else
-                                    adc_active[i] = false;
+                                {
+                                    step_enable[i] = false;
+                                    this.Log(LogLevel.Noisy, "step  {0} disable", i);
+                                }
                                 channelbits = channelbits << 1;
                             }
                         }, name: "ADC_STEPENABLEbits")
@@ -148,79 +165,44 @@ namespace Antmicro.Renode.Peripherals.Analog
                 .WithValueField(0, 12,
                 valueProviderCallback: _ =>
                 {
-                    return GetAdcValue();
+                    uint Value = AdcQueue0.Dequeue();
+                    this.Log(LogLevel.Noisy, "ADC Fifo 0 Value 0x{0:X}", Value);
+                    return Value;
                 }, name: "RESULT")
                .WithTag("Reserved", 12, 20);
 
             Register.ADC_FIFODATA2.Define(this, 0x00, "ADC_FIFODATA2")
-               .WithTag("Reserved", 0, 32);
+                .WithValueField(0, 12,
+                valueProviderCallback: _ =>
+                {
+                    uint Value = AdcQueue1.Dequeue();
+                    this.Log(LogLevel.Noisy, "ADC Fifo 1 Value 0x{0:X}", Value);
+                    return Value;
+                }, name: "RESULT")
+               .WithTag("Reserved", 12, 20);
+
+            Register.ADC_STEPCONFIG1.DefineMany(this, 16, (register, idx) =>
+            {
+                register
+                    .WithValueField(0, 2, out Mode[idx], FieldMode.Read | FieldMode.Write, name: $"MODE{idx}")
+                    .WithValueField(2, 3, FieldMode.Read | FieldMode.Write, name: $"AVERAGING{idx}")
+                    .WithValueField(5, 14, FieldMode.Read | FieldMode.Write, name: $"unused{idx}")
+                    .WithValueField(19, 4, FieldMode.Read | FieldMode.Write, name: $"SEL_INP_SWC{idx}")
+                    .WithValueField(23, 3, FieldMode.Read | FieldMode.Write, name: $"unused{idx}")
+                    .WithFlag(26, out Fifo[idx], FieldMode.Read | FieldMode.Write, name: $"FIFO_SELECT{idx}")
+                    .WithFlag(27, FieldMode.Read | FieldMode.Write, name: $"RANGE_CHECK{idx}")
+                    .WithValueField(28, 4, FieldMode.Read | FieldMode.Write, name: $"unused{idx}");
+            }, stepInBytes: 0x08, resetValue: 0x00, name: "ADC_STEPCONFIGx");
 
 
-            Register.ADC_STEPCONFIG1.Define(this, 0x00, "ADC_STEPCONFIG1")
-                .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG2.Define(this, 0x00, "ADC_STEPCONFIG2")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG3.Define(this, 0x00, "ADC_STEPCONFIG3")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG4.Define(this, 0x00, "ADC_STEPCONFIG4")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG5.Define(this, 0x00, "ADC_STEPCONFIG5")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG6.Define(this, 0x00, "ADC_STEPCONFIG6")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG7.Define(this, 0x00, "ADC_STEPCONFIG7")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG8.Define(this, 0x00, "ADC_STEPCONFIG8")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG9.Define(this, 0x00, "ADC_STEPCONFIG9")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG10.Define(this, 0x00, "ADC_STEPCONFIG10")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG11.Define(this, 0x00, "ADC_STEPCONFIG11")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG12.Define(this, 0x00, "ADC_STEPCONFIG12")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG13.Define(this, 0x00, "ADC_STEPCONFIG13")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG14.Define(this, 0x00, "ADC_STEPCONFIG14")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG15.Define(this, 0x00, "ADC_STEPCONFIG15")
-               .WithValueField(0, 32, name: "unused");
-            Register.ADC_STEPCONFIG16.Define(this, 0x00, "ADC_STEPCONFIG16")
-               .WithValueField(0, 32, name: "unused");
+            Register.ADC_STEPDELAY1.DefineMany(this, 16, (register, idx) =>
+            {
+                register
+                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: $"ADC_STEPDELAY{idx}");
+            }, stepInBytes: 0x08, resetValue: 0x00, name: "ADC_STEPDELAYx");
 
-            Register.ADC_STEPDELAY1.Define(this, 0x00, "ADC_STEPDELAY1")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY2.Define(this, 0x00, "ADC_STEPDELAY2")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY3.Define(this, 0x00, "ADC_STEPDELAY3")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY4.Define(this, 0x00, "ADC_STEPDELAY4")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY5.Define(this, 0x00, "ADC_STEPDELAY5")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY6.Define(this, 0x00, "ADC_STEPDELAY6")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY7.Define(this, 0x00, "ADC_STEPDELAY7")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY8.Define(this, 0x00, "ADC_STEPDELAY8")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY9.Define(this, 0x00, "ADC_STEPDELAY9")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY10.Define(this, 0x00, "ADC_STEPDELAY10")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY11.Define(this, 0x00, "ADC_STEPDELAY11")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY12.Define(this, 0x00, "ADC_STEPDELAY12")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY13.Define(this, 0x00, "ADC_STEPDELAY13")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY14.Define(this, 0x00, "ADC_STEPDELAY14")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY15.Define(this, 0x00, "ADC_STEPDELAY15")
-               .WithTag("Reserved", 0, 32);
-            Register.ADC_STEPDELAY16.Define(this, 0x00, "ADC_STEPDELAY16")
-               .WithTag("Reserved", 0, 32);
+
+
 
 
 
@@ -245,12 +227,45 @@ namespace Antmicro.Renode.Peripherals.Analog
             if (bEND_OF_SEQUENCE.Value == true)
             {
                 if (bADC_MODULE_ENABLE.Value == true)
+                {
+                    for (int i = 0; i < NumberOfADCs; i++)
+                    {
+                        if (step_enable[i] == true)
+                        {
+                            uint Value = adc_values[i];
+                            if (StepIdTag.Value)
+                            {
+                                Value |= (uint)(i << 16);
+                            }
+                            if (false == Fifo[i].Value)
+                                AdcQueue0.Enqueue(Value);
+                            else
+                                AdcQueue1.Enqueue(Value);
+                        }
+                        else
+                        {
+                            if (Mode[i].Value == 0x00)            // if oneshot disable steps
+                                step_enable[i] = false;
+                        }
+                    }
+                    this.Log(LogLevel.Noisy, "Activate IRQ");
                     IRQ.Set(true);
+                }
                 else
+                {
+                    this.Log(LogLevel.Noisy, "Deactivate IRQ");
                     IRQ.Set(false);
+                    AdcQueue0.Clear(); ;
+                    AdcQueue1.Clear(); ;
+                }
             }
             else
+            {
+                this.Log(LogLevel.Noisy, "Deactivate IRQ");
                 IRQ.Set(false);
+                AdcQueue0.Clear(); ;
+                AdcQueue1.Clear(); ;
+            }
         }
 
 
@@ -346,38 +361,21 @@ namespace Antmicro.Renode.Peripherals.Analog
 
         }
 
-        private ushort GetAdcValue()
-        {
-            Boolean bfound = false;
-            ushort Value = 0x00;
-            while (bfound == false)
-            {
-                if (adc_active[CurrentStep] == true)
-                {
-                    bfound = true;
-                    Value = adc_values[CurrentStep];
-                }
-                CurrentStep++;
-                if (CurrentStep>= NumberOfADCs)
-                {
-                    bfound = true;
-                    CurrentStep = 0;
-                }
-            }
-            return Value;
-        }
 
-        public void WriteAdcValue(int offset, ushort value)
+
+        public void WriteAdcValue(int channel, ushort value)
         {
-            if (offset < NumberOfADCs)
-               adc_values[offset] = value;
+            this.Log(LogLevel.Noisy, "Write ADC value num:{0}, value: 0x{1:X}", channel, value);
+
+            if (channel < NumberOfADCs)
+            adc_values[channel] = value;
             UpdateInterrupts();
         }
 
-        public ushort ReadAdcValue(int offset)
+        public uint ReadAdcValue(int channel)
         {
-            if (offset < NumberOfADCs)
-                return adc_values[offset];
+            if (channel < NumberOfADCs)
+                return adc_values[channel];
             return 0;
         }
 

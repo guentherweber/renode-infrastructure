@@ -16,7 +16,7 @@ using Antmicro.Renode.Peripherals.Sensors;
 namespace Antmicro.Renode.Peripherals.Timers
 {
     [AllowedTranslations( AllowedTranslation.WordToDoubleWord | AllowedTranslation.ByteToDoubleWord)]
-    public class DRA78x_Timer : IKnownSize, IDoubleWordPeripheral, IWordPeripheral, IBytePeripheral, IGPIOReceiver
+    public class DRA78x_Timer : IKnownSize, IDoubleWordPeripheral, IWordPeripheral, IBytePeripheral, IGPIOReceiver, IGPIOSender
     {
 
         private readonly DoubleWordRegisterCollection dwordregisters;
@@ -25,6 +25,7 @@ namespace Antmicro.Renode.Peripherals.Timers
         private const long DefaultPeripheralFrequency = 212000000;
 
         public GPIO IRQ { get; private set; }
+        public GPIO PeripheralGPIO { get; private set; }
 
         private Boolean MAT_Enabled = false;
         private Boolean OVF_Enabled = false;
@@ -51,6 +52,7 @@ namespace Antmicro.Renode.Peripherals.Timers
             dwordregisters = new DoubleWordRegisterCollection(this);
 
             IRQ = new GPIO();
+            PeripheralGPIO = new GPIO();
             Timer = new LimitTimer(machine.ClockSource, frequency, this, nameof(Timer), 0xFFFFFFFF, Direction.Ascending, false, WorkMode.Periodic, true, true, 1);
             Timer.LimitReached += LimitReached;
             Timer.Enabled = false;
@@ -75,6 +77,9 @@ namespace Antmicro.Renode.Peripherals.Timers
                 IRQ.Set(true);
                 IRQ.Set(false);
             }
+
+            PeripheralGPIO.Set();
+            PeripheralGPIO.Unset();
 
         }
 
