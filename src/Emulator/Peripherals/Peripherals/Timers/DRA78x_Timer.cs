@@ -25,7 +25,7 @@ namespace Antmicro.Renode.Peripherals.Timers
         private const long DefaultPeripheralFrequency = 212000000;
 
         public GPIO IRQ { get; private set; }
-        public GPIO PeripheralGPIO { get; private set; }
+        public GPIO PORTIMERPWM { get; private set; }
 
         private Boolean MAT_Enabled = false;
         private Boolean OVF_Enabled = false;
@@ -52,7 +52,7 @@ namespace Antmicro.Renode.Peripherals.Timers
             dwordregisters = new DoubleWordRegisterCollection(this);
 
             IRQ = new GPIO();
-            PeripheralGPIO = new GPIO();
+            PORTIMERPWM = new GPIO();
             Timer = new LimitTimer(machine.ClockSource, frequency, this, nameof(Timer), 0xFFFFFFFF, Direction.Ascending, false, WorkMode.Periodic, true, true, 1);
             Timer.LimitReached += LimitReached;
             Timer.Enabled = false;
@@ -78,8 +78,8 @@ namespace Antmicro.Renode.Peripherals.Timers
                 IRQ.Set(false);
             }
 
-            PeripheralGPIO.Set();
-            PeripheralGPIO.Unset();
+            PORTIMERPWM.Set();
+            PORTIMERPWM.Unset();
 
         }
 
