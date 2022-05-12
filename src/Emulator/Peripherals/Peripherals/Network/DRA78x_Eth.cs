@@ -607,8 +607,8 @@ namespace Antmicro.Renode.Peripherals.Network
                 .WithValueField(1, 31, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.CPDMA_EOI_VECTOR.Define(dwordregisters, 0x00, "CPDMA_EOI_VECTOR")
-                .WithValueField(0, 5, out cpdma_eoi_vector, FieldMode.Read | FieldMode.Write, name: "CPDMA_EOI_VECTOR")
-                .WithValueField(5, 27, out cpts_event_low, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithValueField(0, 5, FieldMode.Read | FieldMode.Write, name: "CPDMA_EOI_VECTOR")
+                .WithValueField(5, 27, FieldMode.Read | FieldMode.Write, name: "reserved");
 
         }
 
