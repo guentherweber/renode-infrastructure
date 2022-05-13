@@ -23,7 +23,6 @@ namespace Antmicro.Renode.Peripherals.Timers
 
         public long Size => 112;
         private const long DefaultPeripheralFrequency = 212000000;
-
         public GPIO IRQ { get; private set; }
         public GPIO PORTIMERPWM { get; private set; }
 
@@ -35,6 +34,8 @@ namespace Antmicro.Renode.Peripherals.Timers
 
         private LimitTimer Timer;
         private IFlagRegisterField CompareModeEnabled;
+        private IFlagRegisterField capture_mode;
+        private IValueRegisterField trigger;
         private IFlagRegisterField TCAR_IT_Flag;
         private IFlagRegisterField MAT_IT_Flag;
         private IFlagRegisterField OVF_IT_Flag;
@@ -66,20 +67,41 @@ namespace Antmicro.Renode.Peripherals.Timers
 
         private void LimitReached()
         {
-            if ((AutoReload.Value==true) && (Timer.Limit == 0xFFFFFFFF))
+            if (capture_mode.Value)
             {
-                Timer.Value = TimerStartValue.Value;
-            }
-            if ((OVF_Enabled) && (Timer.Limit == 0xFFFFFFFF))
-            {
-                this.Log(LogLevel.Noisy, "OVF Interrupt occured");
-                OVF_IT_Flag.Value = true;
-                IRQ.Set(true);
-                IRQ.Set(false);
+                if ((AutoReload.Value == true) && (Timer.Limit == 0xFFFFFFFF))
+                {
+                    Timer.Value = TimerStartValue.Value;
+                }
+                if ((OVF_Enabled) && (Timer.Limit == 0xFFFFFFFF))
+                {
+                    this.Log(LogLevel.Noisy, "OVF Interrupt occured");
+                    OVF_IT_Flag.Value = true;
+                    IRQ.Set(true);
+                    IRQ.Set(false);
+                }
             }
 
-            PORTIMERPWM.Set();
-            PORTIMERPWM.Unset();
+            if (CompareModeEnabled.Value)
+            {
+                Timer.Enabled = false;
+
+                if (Timer.Limit == 0xFFFFFFFF)
+                {
+                    Timer.Limit = TimerStartValue.Value;
+                    Timer.Value = 0x00;
+                    Timer.Enabled = true;
+                    PORTIMERPWM.Set();
+                }
+                else
+                {
+                    Timer.Limit = 0xFFFFFFFF;
+                    Timer.Value = TimerStartValue.Value;
+                    Timer.Enabled = true;
+                    PORTIMERPWM.Unset();
+                }
+            }
+
 
         }
 
@@ -252,13 +274,20 @@ namespace Antmicro.Renode.Peripherals.Timers
             .WithFlag(6, out CompareModeEnabled, FieldMode.Read | FieldMode.Write,
                                 writeCallback: (_, value) =>
                                 {
-                                    this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
+                                    if (value)
+                                    {
+                                        this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
+//                                        Timer.Mode = WorkMode.OneShot;
+                                    }
+                                    else
+                                        this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
+
                                 }, name: "CE")
             .WithFlag(7, FieldMode.Read | FieldMode.Write, name: "SCPWM")
             .WithValueField(8, 2, out TransitionCaptureMode, FieldMode.Read | FieldMode.Write, name: "TCM")
-            .WithValueField(10, 2, FieldMode.Read | FieldMode.Write, name: "TRG")
+            .WithValueField(10, 2, out trigger, FieldMode.Read | FieldMode.Write, name: "TRG")
             .WithFlag(12, FieldMode.Read | FieldMode.Write, name: "PT")
-            .WithFlag(13, FieldMode.Read | FieldMode.Write, name: "CAPT_MODE")
+            .WithFlag(13, out capture_mode, FieldMode.Read | FieldMode.Write, name: "CAPT_MODE")
             .WithFlag(14, FieldMode.Read | FieldMode.Write, name: "GPO_CFG")
             .WithValueField(15, 17, FieldMode.Read | FieldMode.Write, name: "reserved");
 

@@ -24,7 +24,7 @@ namespace Antmicro.Renode.Peripherals.Network
 
     public class DRA78x_Eth : IMACInterface, IKnownSize, IDoubleWordPeripheral, IWordPeripheral, IBytePeripheral, IGPIOReceiver, IMemory
     {
-        public DRA78x_Eth(Machine machine)
+        public DRA78x_Eth(Machine machine, long frequency = DefaultSysClockFrequency)
         {
             this.Log(LogLevel.Noisy, "Constructor");
 
@@ -33,6 +33,8 @@ namespace Antmicro.Renode.Peripherals.Network
             messagememory = new ArrayMemory((int)BASE_MESSAGELENGTH);
             MAC = new MACAddress();
             IRQ = new GPIO();
+            EthernetCptsTimer = new LimitTimer(mach.ClockSource, frequency, this, nameof(EthernetCptsTimer), 0x80000000, Direction.Ascending, false, WorkMode.OneShot, true, false, 1);
+            EthernetCptsTimer.LimitReached += LimitReached;
 
             rxQueue = new Queue<EthernetFrame>();
             cptsHighQueue = new Queue<uint>();
@@ -118,7 +120,7 @@ namespace Antmicro.Renode.Peripherals.Network
             return null;
         }
 
-        public void CopyRxFrame()
+        private void CopyRxFrame()
         {
 
             EthernetFrame frame = rxQueue.Peek();
@@ -174,7 +176,7 @@ namespace Antmicro.Renode.Peripherals.Network
                 {
                     if (ts_pend_enable.Value)
                     {
-                        PushCptsData(0x10, 0x04, 1, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]), 0x00);
+                        PushCptsData(0x04, 1, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]));
                         this.Log(LogLevel.Noisy, "Generate IRQ Rx");
                     }
                 }
@@ -215,7 +217,26 @@ namespace Antmicro.Renode.Peripherals.Network
                 CopyRxFrame();
             }
         }
+        private void LimitReached()
+        {
+            EthernetCptsTimer.Enabled = false;
 
+            if (EthernetCptsTimer.Limit == 0x80000000)
+            {
+                // halfrollover event
+                PushCptsData(0x02, 0x01);
+                EthernetCptsTimer.Value = 0x80000000;
+                EthernetCptsTimer.Limit = 0xFFFFFFFF;
+                EthernetCptsTimer.Enabled = true;
+            }
+            else
+            {
+                // rollover event
+                PushCptsData(0x01, 0x01);
+                EthernetCptsTimer.Limit = 0x80000000;
+                EthernetCptsTimer.Enabled = true;
+            }
+        }
 
         public long Size
         {
@@ -230,12 +251,14 @@ namespace Antmicro.Renode.Peripherals.Network
 
         public void OnGPIO(int number, bool value)
         {
-
-            if ((value == true) && (number == 0))
+            if ((number > 0) && (number < 5))
             {
-//                    PushCptsData(0x10, 0x03, 0x00, 0x00, 0x00, 0x00);
+                if (value == true)
+                {
+                    if (hwx_push_enabled[number-1].Value)
+                        PushCptsData(0x03, (uint) number);
+                }
             }
-
         }
 
         public MACAddress MAC { get; set; }
@@ -244,6 +267,7 @@ namespace Antmicro.Renode.Peripherals.Network
         private Queue<uint> cptsHighQueue;
         private Queue<uint> cptsLowQueue;
         private readonly DoubleWordRegisterCollection dwordregisters;
+        private const long DefaultSysClockFrequency = 212000000;
 
         private const uint BASE_ETH_ADR = 0x48484000;
         private const uint BASE_CPSW_ADR = 0x48484000 - BASE_ETH_ADR;
@@ -280,14 +304,21 @@ namespace Antmicro.Renode.Peripherals.Network
         private IFlagRegisterField ts_pend_enable;
         private IFlagRegisterField cpdma_tx_enabled;
         private IFlagRegisterField cpdma_rx_enabled;
+        private IFlagRegisterField cpts_enabled;
+        private IFlagRegisterField[] hwx_push_enabled = new IFlagRegisterField[4];
+//        private IFlagRegisterField hw2_push_enabled;
+//        private IFlagRegisterField hw3_push_enabled;
+//        private IFlagRegisterField hw4_push_enabled;
         private Machine mach;
 
         private IValueRegisterField entry_pointer_idx;
         private ArrayMemory messagememory;
 
+        private LimitTimer EthernetCptsTimer;
 
 
-        private void PushCptsData(uint interruptsource, uint eventtype, uint portnumber, uint messagetype, uint sequenceid, uint timestamp)
+
+        private void PushCptsData(uint eventtype, uint portnumber, uint messagetype=0x00, uint sequenceid=0x00)
         {
             uint DataHigh = 0x00;
 
@@ -301,10 +332,10 @@ namespace Antmicro.Renode.Peripherals.Network
             {
 
             cptsHighQueue.Enqueue(DataHigh);
-            cptsLowQueue.Enqueue(timestamp);
-            this.Log(LogLevel.Noisy, "CPTS  event:{0:X} type:{1:X} port:{2} sequence:{3} time:{4}", eventtype, messagetype, portnumber, sequenceid, timestamp);
+            cptsLowQueue.Enqueue((uint) EthernetCptsTimer.Value);
+            this.Log(LogLevel.Noisy, "CPTS  event:{0:X} type:{1:X} port:{2} sequence:{3} time:{4}", eventtype, messagetype, portnumber, sequenceid, EthernetCptsTimer.Value);
 
-                wr_c0_misc_stat.Value = interruptsource;    // Misc Interrupt Source for Events
+                wr_c0_misc_stat.Value = 0x10;    // Misc Interrupt Source for Events
                 IRQ.Set();
                 IRQ.Unset();
             }
@@ -340,7 +371,7 @@ namespace Antmicro.Renode.Peripherals.Network
             {
                 if (ts_pend_enable.Value)
                 {
-                    PushCptsData(0x10, 0x05, port, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]), 0x00);
+                    PushCptsData(0x05, port, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]));
                     this.Log(LogLevel.Noisy, "Generate IRQ Tx");
                 }
             }
@@ -570,7 +601,6 @@ namespace Antmicro.Renode.Peripherals.Network
                 register
                     .WithValueField(0, 32, out tx_hdp[idx], FieldMode.Read, writeCallback: (_, value) =>
                     {
-//                        this.Log(LogLevel.Noisy, "STATE_RAM_TX{0}_HDP: {1:X}", idx, value);
                         tx_hdp[idx].Value = value;
                         CopyFrameToRenode(idx);
                     }, name: $"STATE_RAM_TX{idx}_HDP");
@@ -608,7 +638,28 @@ namespace Antmicro.Renode.Peripherals.Network
 
 
             Registers.CPTS_CONTROL.Define(dwordregisters, 0x00, "CPTS_CONTROL")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithFlag(0, out cpts_enabled, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
+                        {
+                            if (value)
+                            {
+                                EthernetCptsTimer.Value = 0x00;
+                                EthernetCptsTimer.Limit = 0x80000000;
+                                EthernetCptsTimer.Enabled = true;
+                            }
+                            else
+                            {
+                                EthernetCptsTimer.Enabled = false;
+                                EthernetCptsTimer.Value = 0x00;
+                            }
+
+                        }, name: "CPTS_EN")
+                .WithFlag(1, FieldMode.Read | FieldMode.Write, name: "INT_TEST")
+                .WithValueField(2, 6, FieldMode.Read | FieldMode.Write, name: "reserved")
+                .WithFlag(8, out hwx_push_enabled[0], FieldMode.Read | FieldMode.Write, name: "HW1_TS_PUSH_EN")
+                .WithFlag(9, out hwx_push_enabled[1], FieldMode.Read | FieldMode.Write, name: "HW2_TS_PUSH_EN")
+                .WithFlag(10, out hwx_push_enabled[2], FieldMode.Read | FieldMode.Write, name: "HW3_TS_PUSH_EN")
+                .WithFlag(11, out hwx_push_enabled[3], FieldMode.Read | FieldMode.Write, name: "HW4_TS_PUSH_EN")
+                .WithValueField(12, 20, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.CPTS_INT_ENABLE.Define(dwordregisters, 0x00, "CPTS_INT_ENABLE")
                 .WithFlag(0, out ts_pend_enable, FieldMode.Read | FieldMode.Write, name: "reserved")
@@ -650,12 +701,10 @@ namespace Antmicro.Renode.Peripherals.Network
             Registers.CPTS_EVENT_POP.Define(dwordregisters, 0x00, "CPTS_EVENT_POP")
                 .WithFlag(0, FieldMode.Read | FieldMode.WriteOneToClear, writeCallback: (_, value) =>
                 {
-                    this.Log(LogLevel.Noisy, "EVENT POP {0}", value);
                     if (value)
                     {
                         cptsLowQueue.Dequeue();
                         cptsHighQueue.Dequeue();
-
                     }
                 }, name: "CPTS_EVENT_POP")
                 .WithValueField(1, 31, FieldMode.Read | FieldMode.Write, name: "reserved");
