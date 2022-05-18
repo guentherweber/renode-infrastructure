@@ -126,7 +126,24 @@ namespace Antmicro.Renode.Peripherals.Network
             EthernetFrame frame = rxQueue.Peek();
             int ChannelIndex = 1;
 
-            if (frame.UnderlyingPacket.Type == PacketDotNet.EthernetPacketType.PrecisionTimeProtocol)
+            int frameoffset = 12;
+            // Check VLAN Tag
+            if ((frame.Bytes[frameoffset] == 0x81) && (frame.Bytes[frameoffset + 1] == 0x00))
+            {
+                frameoffset += 4;
+            }
+            // get ethertype
+            int ethertyp = (frame.Bytes[frameoffset] << 8) | (frame.Bytes[frameoffset + 1]);
+            frameoffset += 2;
+            Boolean timestampActive = false;
+            // compare with registers
+            if ((ts_ltype1_enable.Value) && (ts_ltype1.Value == ethertyp) && (ts_rx_enable.Value))
+                timestampActive = true;
+
+            if ((ts_ltype2_enable.Value) && (ts_ltype2.Value == ethertyp) && (ts_rx_enable.Value))
+                timestampActive = true;
+
+            if (timestampActive)
                 ChannelIndex = 0;
 
 
@@ -172,13 +189,10 @@ namespace Antmicro.Renode.Peripherals.Network
             if (OverrunError == false)
             {
                 rxQueue.Dequeue();         // remove processed frame
-                if (frame.UnderlyingPacket.Type == PacketDotNet.EthernetPacketType.PrecisionTimeProtocol)
+                if ((ts_pend_enable.Value) && (timestampActive))
                 {
-                    if (ts_pend_enable.Value)
-                    {
-                        PushCptsData(0x04, 1, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]));
-                        this.Log(LogLevel.Noisy, "Generate IRQ Rx");
-                    }
+                    PushCptsData(0x04, 1, (uint)frame.Bytes[frameoffset] & 0x000F, ((uint)frame.Bytes[frameoffset+30] << 8) | ((uint)frame.Bytes[frameoffset+31]));
+                    this.Log(LogLevel.Noisy, "Generate IRQ Rx");
                 }
 
                 Descriptor.BufferLength.Value = (uint)NumBytesToCopy;     // Write BufferLength
@@ -305,10 +319,14 @@ namespace Antmicro.Renode.Peripherals.Network
         private IFlagRegisterField cpdma_tx_enabled;
         private IFlagRegisterField cpdma_rx_enabled;
         private IFlagRegisterField cpts_enabled;
+        private IFlagRegisterField ts_ltype1_enable;
+        private IFlagRegisterField ts_ltype2_enable;
+        private IFlagRegisterField ts_rx_enable;
+        private IFlagRegisterField ts_tx_enable;
         private IFlagRegisterField[] hwx_push_enabled = new IFlagRegisterField[4];
-//        private IFlagRegisterField hw2_push_enabled;
-//        private IFlagRegisterField hw3_push_enabled;
-//        private IFlagRegisterField hw4_push_enabled;
+        //        private IFlagRegisterField hw2_push_enabled;
+        //        private IFlagRegisterField hw3_push_enabled;
+        //        private IFlagRegisterField hw4_push_enabled;
         private Machine mach;
 
         private IValueRegisterField entry_pointer_idx;
@@ -367,13 +385,26 @@ namespace Antmicro.Renode.Peripherals.Network
 
         private void SendFrame(EthernetFrame frame, uint port)
         {
-            if (frame.UnderlyingPacket.Type == PacketDotNet.EthernetPacketType.PrecisionTimeProtocol)
+            int offset = 12;
+            // Check VLAN Tag
+            if ((frame.Bytes[offset] == 0x81) && (frame.Bytes[offset+1]== 0x00))
             {
-                if (ts_pend_enable.Value)
-                {
-                    PushCptsData(0x05, port, (uint)frame.Bytes[14] & 0x000F, ((uint)frame.Bytes[44] << 8) | ((uint)frame.Bytes[45]));
-                    this.Log(LogLevel.Noisy, "Generate IRQ Tx");
-                }
+                offset += 4;
+            }
+            // get ethertype
+            int ethertyp = (frame.Bytes[offset] << 8) | (frame.Bytes[offset + 1]);
+            offset += 2;
+            Boolean timestampActive = false;
+            // compare with register
+            if ((ts_ltype1_enable.Value) && (ts_ltype1.Value == ethertyp) && (ts_tx_enable.Value))
+                timestampActive = true;
+
+            if ((ts_ltype2_enable.Value) && (ts_ltype2.Value == ethertyp) && (ts_tx_enable.Value))
+                timestampActive = true;
+            if ( (timestampActive) && (ts_pend_enable.Value) )
+            {
+                PushCptsData(0x05, port, (uint)frame.Bytes[offset] & 0x000F, ((uint)frame.Bytes[offset+30] << 8) | ((uint)frame.Bytes[offset+31]));
+                this.Log(LogLevel.Noisy, "Generate IRQ Tx");
             }
             FrameReady?.Invoke(frame);
 
@@ -495,7 +526,11 @@ namespace Antmicro.Renode.Peripherals.Network
                 .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.PORT_P1_CONTROL.Define(dwordregisters, 0x00, "PORT_P1_CONTROL")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithFlag(0, out ts_rx_enable, FieldMode.Read | FieldMode.Write, name: "P1_TS_RX_EN")
+                .WithFlag(1, out ts_tx_enable, FieldMode.Read | FieldMode.Write, name: "P1_TS_TX_EN")
+                .WithFlag(2, out ts_ltype1_enable, FieldMode.Read | FieldMode.Write, name: "P1_TS_LTYPE1_EN")
+                .WithFlag(3, out ts_ltype2_enable, FieldMode.Read | FieldMode.Write, name: "P1_TS_LTYPE2_EN")
+                .WithValueField(4, 28, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.CPSW_TS_LTYPE.Define(dwordregisters, 0x00, "CPSW_TS_LTYPE")
                 .WithValueField(0, 16, out ts_ltype1, FieldMode.Read | FieldMode.Write, name: "TS_LTYPE1")
