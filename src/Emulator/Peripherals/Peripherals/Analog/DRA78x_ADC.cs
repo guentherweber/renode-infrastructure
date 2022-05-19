@@ -162,24 +162,22 @@ namespace Antmicro.Renode.Peripherals.Analog
                .WithTag("Reserved", 0, 32);
 
             Register.ADC_FIFODATA1.Define(this, 0x00, "ADC_FIFODATA1")
-                .WithValueField(0, 12,
+                .WithValueField(0, 32,
                 valueProviderCallback: _ =>
                 {
                     uint Value = AdcQueue0.Dequeue();
-                    this.Log(LogLevel.Noisy, "ADC Fifo 0 Value 0x{0:X}", Value);
+                    this.Log(LogLevel.Noisy, "ADC Fifo 0:{0:X} Channel:{1} Value 0x{2:X}", Value, (Value & 0x000F0000) >> 16, Value & 0x00000FFF);
                     return Value;
-                }, name: "RESULT")
-               .WithTag("Reserved", 12, 20);
+                }, name: "RESULT");
 
             Register.ADC_FIFODATA2.Define(this, 0x00, "ADC_FIFODATA2")
-                .WithValueField(0, 12,
+                .WithValueField(0, 32,
                 valueProviderCallback: _ =>
                 {
                     uint Value = AdcQueue1.Dequeue();
-                    this.Log(LogLevel.Noisy, "ADC Fifo 1 Value 0x{0:X}", Value);
+                    this.Log(LogLevel.Noisy, "ADC Fifo 1:{0:X} Channel:{1} Value 0x{2:X}", Value, (Value & 0x000F0000) >> 16, Value & 0x00000FFF);
                     return Value;
-                }, name: "RESULT")
-               .WithTag("Reserved", 12, 20);
+                }, name: "RESULT");
 
             Register.ADC_STEPCONFIG1.DefineMany(this, 16, (register, idx) =>
             {
@@ -363,12 +361,12 @@ namespace Antmicro.Renode.Peripherals.Analog
 
 
 
-        public void WriteAdcValue(int channel, ushort value)
+        public void WriteAdcValue(int channel, uint value)
         {
             this.Log(LogLevel.Noisy, "Write ADC value num:{0}, value: 0x{1:X}", channel, value);
 
             if (channel < NumberOfADCs)
-            adc_values[channel] = value;
+               adc_values[channel] = value;
             UpdateInterrupts();
         }
 
