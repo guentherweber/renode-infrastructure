@@ -54,7 +54,7 @@ namespace Antmicro.Renode.Peripherals.Timers
 
             IRQ = new GPIO();
             PORTIMERPWM = new GPIO();
-            Timer = new LimitTimer(machine.ClockSource, frequency, this, nameof(Timer), 0xFFFFFFFF, Direction.Ascending, false, WorkMode.Periodic, true, true, 1);
+            Timer = new LimitTimer(machine.ClockSource, frequency, this, nameof(Timer), 0xFFFFFFFF, Direction.Ascending, false, WorkMode.OneShot, true, true, 1);
             Timer.LimitReached += LimitReached;
             Timer.Enabled = false;
             Timer.EventEnabled = true;
@@ -88,18 +88,30 @@ namespace Antmicro.Renode.Peripherals.Timers
 
                 if (Timer.Limit == 0xFFFFFFFF)
                 {
-                    Timer.Limit = TimerStartValue.Value;
-                    Timer.Value = 0x00;
-                    Timer.Enabled = true;
-                    PORTIMERPWM.Set();
+                    if (OVF_Enabled)
+                    {
+                        this.Log(LogLevel.Noisy, "OVF Interrupt occured");
+                        OVF_IT_Flag.Value = true;
+                        IRQ.Set(true);
+                        IRQ.Set(false);
+                    }
+                    Timer.Value = TimerStartValue.Value;
+                    Timer.Limit = TimerCompareValue.Value;
+                    if (trigger.Value != 0)
+                    {
+                        PORTIMERPWM.Set();
+                    }
                 }
                 else
                 {
                     Timer.Limit = 0xFFFFFFFF;
-                    Timer.Value = TimerStartValue.Value;
-                    Timer.Enabled = true;
-                    PORTIMERPWM.Unset();
+                    Timer.Value = TimerCompareValue.Value;
+                    if (trigger.Value == 2)
+                    {
+                        PORTIMERPWM.Unset();
+                    }
                 }
+                Timer.Enabled = true;
             }
 
 
@@ -188,8 +200,6 @@ namespace Antmicro.Renode.Peripherals.Timers
                                         TCar2Captured = false;
                                         this.Log(LogLevel.Noisy, "TCAR_IT Flag status: cleared");
                                     }
-                                    else
-                                       this.Log(LogLevel.Noisy, "TCAR_IT Flag status: active");
                                 }, name: "TCAR_IT_FLAG")
             .WithValueField(3, 29, FieldMode.Read | FieldMode.Write, name: "reserved");
 
@@ -260,7 +270,11 @@ namespace Antmicro.Renode.Peripherals.Timers
 //                                    Timer.AutoUpdate = value;
                                     this.Log(LogLevel.Noisy, "AutoReload Enabled: {0}", value);
                                 }, name: "AR")
-            .WithValueField(2, 3, out Prescaler, FieldMode.Read | FieldMode.Write,name: "PTV")
+            .WithValueField(2, 3, out Prescaler, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    this.Log(LogLevel.Noisy, "Prescaler: {0}", value);
+                                }, name: "PTV")
             .WithFlag(5, FieldMode.Read | FieldMode.Write,
                                 writeCallback: (_, value) =>
                                 {
@@ -277,18 +291,41 @@ namespace Antmicro.Renode.Peripherals.Timers
                                     if (value)
                                     {
                                         this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
-//                                        Timer.Mode = WorkMode.OneShot;
                                     }
                                     else
                                         this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
 
                                 }, name: "CE")
-            .WithFlag(7, FieldMode.Read | FieldMode.Write, name: "SCPWM")
-            .WithValueField(8, 2, out TransitionCaptureMode, FieldMode.Read | FieldMode.Write, name: "TCM")
-            .WithValueField(10, 2, out trigger, FieldMode.Read | FieldMode.Write, name: "TRG")
-            .WithFlag(12, FieldMode.Read | FieldMode.Write, name: "PT")
-            .WithFlag(13, out capture_mode, FieldMode.Read | FieldMode.Write, name: "CAPT_MODE")
-            .WithFlag(14, FieldMode.Read | FieldMode.Write, name: "GPO_CFG")
+            .WithFlag(7, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    this.Log(LogLevel.Noisy, "SCPWM: {0}", value);
+                                }, name: "SCPWM")
+            .WithValueField(8, 2, out TransitionCaptureMode, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    this.Log(LogLevel.Noisy, "TCM: {0}", value);
+                                }, name: "TCM")
+            .WithValueField(10, 2, out trigger, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    this.Log(LogLevel.Noisy, "TRG: {0}", value);
+                                }, name: "TRG")
+            .WithFlag(12, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    this.Log(LogLevel.Noisy, "PT: {0}", value);
+                                }, name: "PT")
+            .WithFlag(13, out capture_mode, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    this.Log(LogLevel.Noisy, "CAPT_MODE: {0}", value);
+                                }, name: "CAPT_MODE")
+            .WithFlag(14, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    this.Log(LogLevel.Noisy, "GPO_CFG: {0}", value);
+                                }, name: "GPO_CFG")
             .WithValueField(15, 17, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.TIMER_TCRR.Define(dwordregisters, 0x00, "TIMER_TCRR")
