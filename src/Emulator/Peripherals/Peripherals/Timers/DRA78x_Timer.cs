@@ -20,7 +20,7 @@ namespace Antmicro.Renode.Peripherals.Timers
     {
 
         private readonly DoubleWordRegisterCollection dwordregisters;
-
+        private String Name;
         public long Size => 112;
         private const long DefaultPeripheralFrequency = 212000000;
         public GPIO IRQ { get; private set; }
@@ -48,16 +48,15 @@ namespace Antmicro.Renode.Peripherals.Timers
         private IValueRegisterField Tcar1;
         private IValueRegisterField Tcar2;
 
-        public DRA78x_Timer( Machine machine, long frequency = DefaultPeripheralFrequency)
+        public DRA78x_Timer( Machine machine, long frequency = DefaultPeripheralFrequency, string name = "timer")
         {
             dwordregisters = new DoubleWordRegisterCollection(this);
-
+            Name = name;
             IRQ = new GPIO();
             PORTIMERPWM = new GPIO();
-            Timer = new LimitTimer(machine.ClockSource, frequency, this, nameof(Timer), 0xFFFFFFFF, Direction.Ascending, false, WorkMode.OneShot, true, true, 1);
+            Timer = new LimitTimer(machine.ClockSource, frequency, this, name, 0xFFFFFFFF, Direction.Ascending, false, WorkMode.OneShot, true, false, 1);
             Timer.LimitReached += LimitReached;
-            Timer.Enabled = false;
-            Timer.EventEnabled = true;
+
 
 
             DefineRegisters();
@@ -67,54 +66,54 @@ namespace Antmicro.Renode.Peripherals.Timers
 
         private void LimitReached()
         {
-            if (capture_mode.Value)
+            if (TimerEnabled.Value == true)
             {
-                if ((AutoReload.Value == true) && (Timer.Limit == 0xFFFFFFFF))
-                {
-                    Timer.Value = TimerStartValue.Value;
-                }
-                if ((OVF_Enabled) && (Timer.Limit == 0xFFFFFFFF))
-                {
-                    this.Log(LogLevel.Noisy, "OVF Interrupt occured");
-                    OVF_IT_Flag.Value = true;
-                    IRQ.Set(true);
-                    IRQ.Set(false);
-                }
-            }
-
-            if (CompareModeEnabled.Value)
-            {
-                Timer.Enabled = false;
-
-                if (Timer.Limit == 0xFFFFFFFF)
+                this.Log(LogLevel.Noisy, "Limit Reached {0}", Name);
+                if (CompareModeEnabled.Value == false)
                 {
                     if (OVF_Enabled)
                     {
-                        this.Log(LogLevel.Noisy, "OVF Interrupt occured");
+                        this.Log(LogLevel.Noisy, "HW Timer OVF Interrupt occured");
                         OVF_IT_Flag.Value = true;
                         IRQ.Set(true);
                         IRQ.Set(false);
                     }
                     Timer.Value = TimerStartValue.Value;
-                    Timer.Limit = TimerCompareValue.Value;
-                    if (trigger.Value != 0)
-                    {
-                        PORTIMERPWM.Set();
-                    }
                 }
                 else
                 {
-                    Timer.Limit = 0xFFFFFFFF;
-                    Timer.Value = TimerCompareValue.Value;
-                    if (trigger.Value == 2)
+                    if (Timer.Limit == 0xFFFFFFFF)
                     {
-                        PORTIMERPWM.Unset();
+                        if (OVF_Enabled)
+                        {
+                            this.Log(LogLevel.Noisy, "Compare/PWM: OVF Interrupt occured");
+                            OVF_IT_Flag.Value = true;
+                            IRQ.Set(true);
+                            IRQ.Set(false);
+                        }
+                        Timer.Value = TimerStartValue.Value;
+                        Timer.Limit = TimerCompareValue.Value;
+                        if (trigger.Value != 0)
+                        {
+                            this.Log(LogLevel.Noisy, "Compare/PWM: Set Pin");
+                            PORTIMERPWM.Set();
+                        }
+                    }
+                    else
+                    {
+                        Timer.Limit = 0xFFFFFFFF;
+                        Timer.Value = TimerCompareValue.Value;
+                        if (trigger.Value == 2)
+                        {
+                            this.Log(LogLevel.Noisy, "Compare/PWM: Unset Pin");
+                            PORTIMERPWM.Unset();
+                        }
                     }
                 }
+
+                // restart timer due to oneshot mode
                 Timer.Enabled = true;
             }
-
-
         }
 
         public void OnGPIO(int number, bool value)
@@ -261,8 +260,10 @@ namespace Antmicro.Renode.Peripherals.Timers
             .WithFlag(0, out TimerEnabled, FieldMode.Read | FieldMode.Write,
                                 writeCallback: (_, value) =>
                                 {
-                                   Timer.Enabled = value;
-                                   this.Log(LogLevel.Noisy, "Timer Enabled: {0}", Timer.Enabled);
+                                    TimerEnabled.Value = value;
+//                                    if (Name == "timer5")
+//                                       Timer.Enabled = value;
+                                    this.Log(LogLevel.Noisy, "Timer Enabled: {0}", value);
                                 }, name: "ST")
             .WithFlag(1, out AutoReload, FieldMode.Read | FieldMode.Write,
                                 writeCallback: (_, value) =>
@@ -288,19 +289,14 @@ namespace Antmicro.Renode.Peripherals.Timers
             .WithFlag(6, out CompareModeEnabled, FieldMode.Read | FieldMode.Write,
                                 writeCallback: (_, value) =>
                                 {
-                                    if (value)
-                                    {
-                                        this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
-                                    }
-                                    else
-                                        this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
-
+                                    this.Log(LogLevel.Noisy, "Compare Mode Enabled: {0}", value);
                                 }, name: "CE")
             .WithFlag(7, FieldMode.Read | FieldMode.Write,
                                 writeCallback: (_, value) =>
                                 {
                                     this.Log(LogLevel.Noisy, "SCPWM: {0}", value);
                                 }, name: "SCPWM")
+
             .WithValueField(8, 2, out TransitionCaptureMode, FieldMode.Read | FieldMode.Write,
                                 writeCallback: (_, value) =>
                                 {
@@ -342,7 +338,12 @@ namespace Antmicro.Renode.Peripherals.Timers
                                 }, name: "TIMER_TCRR");
 
             Registers.TIMER_TLDR.Define(dwordregisters, 0x00, "TIMER_TLDR")
-            .WithValueField(0, 32, out TimerStartValue, FieldMode.Read | FieldMode.Write, name: "TIMER_TLDR");
+            .WithValueField(0, 32, out TimerStartValue, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    TimerStartValue.Value = value;
+                                    this.Log(LogLevel.Noisy, "Timer Start Write: {0:X}", value);
+                                }, name: "TIMER_TLDR");
 
             Registers.TIMER_TTGR.Define(dwordregisters, 0xFFFFFFFF, "TIMER_TTGR")
             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "TIMER_TTGR");
