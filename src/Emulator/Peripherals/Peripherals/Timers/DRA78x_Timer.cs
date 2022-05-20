@@ -261,8 +261,8 @@ namespace Antmicro.Renode.Peripherals.Timers
                                 writeCallback: (_, value) =>
                                 {
                                     TimerEnabled.Value = value;
-//                                    if (Name == "timer5")
-//                                       Timer.Enabled = value;
+//                                    if (Name == "timer7")
+                                       Timer.Enabled = value;
                                     this.Log(LogLevel.Noisy, "Timer Enabled: {0}", value);
                                 }, name: "ST")
             .WithFlag(1, out AutoReload, FieldMode.Read | FieldMode.Write,
@@ -329,11 +329,11 @@ namespace Antmicro.Renode.Peripherals.Timers
                                 writeCallback: (_, value) =>
                                 {
                                     Timer.Value = value;
-                                    this.Log(LogLevel.Noisy, "Timer Value Write: {0:X}", value);
+                                    this.Log(LogLevel.Noisy, "Timer TCRR Value: {0:X}", value);
                                 },                                
                                 valueProviderCallback: _ =>
                                 {
-                                    this.Log(LogLevel.Noisy, "Timer Value Read: {0:X}", Timer.Value);
+                                    this.Log(LogLevel.Noisy, "Timer TCRR Value: {0:X}", Timer.Value);
                                     return (uint) Timer.Value;
                                 }, name: "TIMER_TCRR");
 
@@ -342,7 +342,7 @@ namespace Antmicro.Renode.Peripherals.Timers
                                 writeCallback: (_, value) =>
                                 {
                                     TimerStartValue.Value = value;
-                                    this.Log(LogLevel.Noisy, "Timer Start Write: {0:X}", value);
+                                    this.Log(LogLevel.Noisy, "Timer TLDR  start: {0:X}", value);
                                 }, name: "TIMER_TLDR");
 
             Registers.TIMER_TTGR.Define(dwordregisters, 0xFFFFFFFF, "TIMER_TTGR")
@@ -362,7 +362,12 @@ namespace Antmicro.Renode.Peripherals.Timers
             .WithValueField(10, 22, FieldMode.Read | FieldMode.Write, name: "TIMER_TWPS");
 
             Registers.TIMER_TMAR.Define(dwordregisters, 0x00, "TIMER_TMAR")
-            .WithValueField(0, 32, out TimerCompareValue, FieldMode.Read | FieldMode.Write, name: "TIMER_TMAR");
+            .WithValueField(0, 32, out TimerCompareValue, FieldMode.Read | FieldMode.Write,
+                                writeCallback: (_, value) =>
+                                {
+                                    TimerCompareValue.Value = value;
+                                    this.Log(LogLevel.Noisy, "Timer TMAR Match Value: {0:X}", value);
+                                }, name: "TIMER_TMAR");
 
             Registers.TIMER_TCAR1.Define(dwordregisters, 0x00, "TIMER_TCAR1")
             .WithValueField(0, 32, out Tcar1, FieldMode.Read, name: "TIMER_TCAR1");
