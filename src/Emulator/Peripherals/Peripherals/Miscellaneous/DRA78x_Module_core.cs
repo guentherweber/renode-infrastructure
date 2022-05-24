@@ -24,42 +24,24 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         private void DefineRegisters()
         {
             Registers.CTRL_CORE_ROM_AUXBOOT0.Define(dwordregisters, 0x00, "CTRL_CORE_ROM_AUXBOOT0")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
+                .WithValueField(0, 32, out auxboot0, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                 {
-                    if (mach.SystemBus.GetCurrentCPUId() == 0)
-                    {
-                        auxboot0 = value;
-                        IEnumerable<ICPU> cpus = mach.SystemBus.GetCPUs();
-                        ICPU cpu = cpus.ElementAt(1);
-                        if (cpu.IsHalted == true)
-                        {
-                            uint remain = auxboot1 % 4;
-
-                            if ((auxboot1-remain) != cpu.PC)
-                            {
-                                cpu.IsHalted = false;
-                                this.Log(LogLevel.Noisy, "Start CPU 1");
-                            }
-                        }
-                    }
-                },
-                valueProviderCallback: _ =>
-                {
-                    return auxboot0;
+//                    this.Log(LogLevel.Noisy, "cpu {0} auxboot0 write {1:X}", mach.SystemBus.GetCurrentCPUId(), auxboot0);
+//                        IEnumerable<ICPU> cpus = mach.SystemBus.GetCPUs();
+//                        ICPU cpu = cpus.ElementAt(1); auxboot0 = value;
                 }, name: "AUXBOOT0");
 
             Registers.CTRL_CORE_ROM_AUXBOOT1.Define(dwordregisters, 0x00, "CTRL_CORE_ROM_AUXBOOT1")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
+                .WithValueField(0, 32, out auxboot1, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                 {
-                    if (mach.SystemBus.GetCurrentCPUId() == 0)
-                    {
-                        auxboot1 = value;
-                    }
-
-                },
-                valueProviderCallback: _ =>
-                {
-                    return auxboot1;
+//                    auxboot1 = value;
+  //                  this.Log(LogLevel.Noisy, "cpu {0} auxboot1 write {1:X}", mach.SystemBus.GetCurrentCPUId(), auxboot1);
+  /*                  
+                                        if (mach.SystemBus.GetCurrentCPUId() == 0)
+                                        {
+                                            auxboot1 = value;
+                                        }
+  */                  
                 }, name: "AUXBOOT1");
             
             Registers.CM_L4PER_CLKSTCTRL.Define(dwordregisters, 0x1000000, "CM_L4PER_CLKSTCTRL")
@@ -82,8 +64,6 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         public void Reset()
         {
             dwordregisters.Reset();
-            auxboot0 = 0x00;
-            auxboot1 = 0x00;
         }
 
         public uint ReadDoubleWord(long offset)
@@ -124,8 +104,11 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         private readonly DoubleWordRegisterCollection dwordregisters;
         private Machine mach;
         long IKnownSize.Size => 0x8000;
-        private uint auxboot0 = 0x00;
-        private uint auxboot1 = 0x00;
+//        private uint auxboot0 = 0x00;
+//        private uint auxboot1 = 0x00;
+        private IValueRegisterField auxboot0;
+        private IValueRegisterField auxboot1;
+
 
         private enum Registers : long
         {
