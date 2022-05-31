@@ -165,6 +165,7 @@ namespace Antmicro.Renode.Peripherals.Network
                 if (Descriptor.Owner.Value == true)
                 {
                     NumBytesToCopy = Math.Min((int)Descriptor.BufferLength.Value, RemainingBytesToCopy);
+                    this.Log(LogLevel.Noisy, "Received packet Adr:{0:X}  Lenght: {1} ", Descriptor.BufferPointer.Value + Descriptor.BufferOffset.Value, NumBytesToCopy);
                     mach.SystemBus.WriteBytes(frame.Bytes, Descriptor.BufferPointer.Value + Descriptor.BufferOffset.Value, StartIndex, NumBytesToCopy);
                     RemainingBytesToCopy -= NumBytesToCopy;
                     StartIndex += NumBytesToCopy;
@@ -428,6 +429,7 @@ namespace Antmicro.Renode.Peripherals.Network
                 while (RemainingBytesToCopy > 0)
                 {
                     NumBytesToCopy = Math.Min((int)Descriptor.BufferLength.Value, (int)Descriptor.PacketLength.Value);
+                    this.Log(LogLevel.Noisy, "Send packet Adr:{0:X}  Lenght: {1} ", Descriptor.BufferPointer.Value + Descriptor.BufferOffset.Value, NumBytesToCopy);
                     mach.SystemBus.ReadBytes(Descriptor.BufferPointer.Value + Descriptor.BufferOffset.Value, NumBytesToCopy, packetBytes, StartIndex);
                     RemainingBytesToCopy -= NumBytesToCopy;
                     StartIndex += NumBytesToCopy;
@@ -500,7 +502,7 @@ namespace Antmicro.Renode.Peripherals.Network
                 .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.MDIO_USERACCESS0.Define(dwordregisters, 0x04, "MDIO_USERACCESS0")
-                .WithValueField(0, 15, FieldMode.Read, name: "DATA")
+                .WithValueField(0, 16, FieldMode.Read, name: "DATA")
                 .WithValueField(16, 5, FieldMode.Read | FieldMode.Write, name: "PHYADR")
                 .WithValueField(21, 5, FieldMode.Read | FieldMode.Write, name: "REGADR")
                 .WithValueField(26, 3, FieldMode.Read | FieldMode.Write, name: "reserved")
@@ -509,7 +511,7 @@ namespace Antmicro.Renode.Peripherals.Network
                 .WithFlag(31, FieldMode.Read | FieldMode.WriteOneToClear, name: "GO");
 
             Registers.MDIO_USERACCESS1.Define(dwordregisters, 0x04, "MDIO_USERACCESS1")
-                .WithValueField(0, 15, FieldMode.Read, name: "DATA")
+                .WithValueField(0, 16, FieldMode.Read, name: "DATA")
                 .WithValueField(16, 5, FieldMode.Read | FieldMode.Write, name: "PHYADR")
                 .WithValueField(21, 5, FieldMode.Read | FieldMode.Write, name: "REGADR")
                 .WithValueField(26, 3, FieldMode.Read | FieldMode.Write, name: "reserved")
