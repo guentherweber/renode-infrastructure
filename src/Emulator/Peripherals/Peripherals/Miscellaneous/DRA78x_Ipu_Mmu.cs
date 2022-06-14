@@ -20,32 +20,32 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         private void DefineRegisters()
         {
             Registers.IPU_MMU_REVISION.Define(dwordregisters, 0x01, "IPU_MMU_REVISION")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_SYSSTATUS.Define(dwordregisters, 0x01, "IPU_MMU_SYSSTATUS")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_SYSCONFIG.Define(dwordregisters, 0x00, "IPU_MMU_SYSCONFIG")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_IRQSTATUS.Define(dwordregisters, 0x00, "IPU_MMU_IRQSTATUS")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.IPU_MMU_IRQENABLE.Define(dwordregisters, 0x00, "IPU_MMU_IRQENABLE")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_CNTL.Define(dwordregisters, 0x00, "IPU_MMU_CNTL")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_LOCK.Define(dwordregisters, 0x00, "IPU_MMU_LOCK")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_LD_TLB.Define(dwordregisters, 0x00, "IPU_MMU_LD_TLB")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_TTB.Define(dwordregisters, 0x00, "IPU_MMU_LD_TTB")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_CAM.Define(dwordregisters, 0x00, "IPU_MMU_CAM")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_RAM.Define(dwordregisters, 0x00, "IPU_MMU_RAM")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_GFLUSH.Define(dwordregisters, 0x00, "IPU_MMU_GFLUSH")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
             Registers.IPU_MMU_GPR.Define(dwordregisters, 0x00, "IPU_MMU_GPR")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
 
         }
 

@@ -36,7 +36,11 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
         public void Reset()
         {
-            nvics[machine.SystemBus.GetCurrentCPUId()].Reset();
+            foreach (var name in nvics)
+            {
+                name.Reset();
+            }
+//            nvics[machine.SystemBus.GetCurrentCPUId()].Reset();
         }
 
         private Machine machine;

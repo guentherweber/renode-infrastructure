@@ -24,33 +24,33 @@ namespace Antmicro.Renode.Peripherals.DMA
 
         public long Size => 0x100000;
 
-        public GPIO IRQ_Region0{ get; private set; }
-        public GPIO IRQ_Region1 { get; private set; }
-        public GPIO IRQ_Region2 { get; private set; }
-        public GPIO IRQ_Region3 { get; private set; }
-        public GPIO IRQ_Region4 { get; private set; }
-        public GPIO IRQ_Region5 { get; private set; }
-        public GPIO IRQ_Region6 { get; private set; }
-        public GPIO IRQ_Region7 { get; private set; }
+        public GPIO IRQ_QDMA_Channel0 { get; private set; }
+        public GPIO IRQ_QDMA_Channel1 { get; private set; }
+        public GPIO IRQ_QDMA_Channel2 { get; private set; }
+        public GPIO IRQ_QDMA_Channel3 { get; private set; }
+        public GPIO IRQ_QDMA_Channel4 { get; private set; }
+        public GPIO IRQ_QDMA_Channel5 { get; private set; }
+        public GPIO IRQ_QDMA_Channel6 { get; private set; }
+        public GPIO IRQ_QDMA_Channel7 { get; private set; }
 
 
         public DRA78x_EDMA_TPCC( Machine machine)
         {
             dwordregisters = new DoubleWordRegisterCollection(this);
 
-            IrqPerRegion = new GPIO[8];
+            Irq_QDMA_Channel = new GPIO[8];
             for (int i = 0; i < 8; i++)
             {
-               IrqPerRegion[i] = new GPIO();
+               Irq_QDMA_Channel[i] = new GPIO();
             }
-            IRQ_Region0 = IrqPerRegion[0];
-            IRQ_Region1 = IrqPerRegion[1];
-            IRQ_Region2 = IrqPerRegion[2];
-            IRQ_Region3 = IrqPerRegion[3];
-            IRQ_Region4 = IrqPerRegion[4];
-            IRQ_Region5 = IrqPerRegion[5];
-            IRQ_Region6 = IrqPerRegion[6];
-            IRQ_Region7 = IrqPerRegion[7];
+            IRQ_QDMA_Channel0 = Irq_QDMA_Channel[0];
+            IRQ_QDMA_Channel1 = Irq_QDMA_Channel[1];
+            IRQ_QDMA_Channel2 = Irq_QDMA_Channel[2];
+            IRQ_QDMA_Channel3 = Irq_QDMA_Channel[3];
+            IRQ_QDMA_Channel4 = Irq_QDMA_Channel[4];
+            IRQ_QDMA_Channel5 = Irq_QDMA_Channel[5];
+            IRQ_QDMA_Channel6 = Irq_QDMA_Channel[6];
+            IRQ_QDMA_Channel7 = Irq_QDMA_Channel[7];
 
             this.machine = machine;
             engine = new DmaEngine(machine);
@@ -72,19 +72,21 @@ namespace Antmicro.Renode.Peripherals.DMA
 
         private void CheckQDMA(int ParaIdx, int FieldIdx)
         {
-            for (int region=0; region<8; region++)
+            for (int qdma_channel=0; qdma_channel<8; qdma_channel++)
             {
-                if (ParaIdx == ParaPerRegion[region].Value)
+                if (ParaIdx == ParaPerQDMAChannel[qdma_channel].Value)
                 {
-                    if (FieldIdx == TriggerWordRegion[region].Value)
-                    IntActiveLow8[region].Value = IntEnableLow8[region];
-                    IntActiveHigh8[region].Value = IntEnableHigh8[region];
-                    if ((IntActiveHigh8[region].Value != 0) || (IntActiveLow8[region].Value != 0))
+                    if (FieldIdx == TriggerWordQDMAChannel[qdma_channel].Value)
                     {
-                        this.Log(LogLevel.Debug, "Interrupt Region No{4} : DMA Copy Para Index {0} : Src 0x{1:X}, Dst 0x{2:X}, Size 0x{3:X}", ParaIdx, SourceAdr[ParaIdx].Value, DestinationAdr[ParaIdx].Value, (int)ACount[ParaIdx].Value, region);
-                        var request = new Request(SourceAdr[ParaIdx].Value, DestinationAdr[ParaIdx].Value, (int)ACount[ParaIdx].Value, TransferType.Byte, TransferType.Byte);
-                        engine.IssueCopy(request);
-                        IrqPerRegion[region].Set(true);
+                        IntActiveLow8[qdma_channel].Value = IntEnableLow8[qdma_channel];
+                        IntActiveHigh8[qdma_channel].Value = IntEnableHigh8[qdma_channel];
+                        if ((IntActiveHigh8[qdma_channel].Value != 0) || (IntActiveLow8[qdma_channel].Value != 0))
+                        {
+                            this.Log(LogLevel.Debug, "QDMA Channel {4} : DMA Copy Para Index {0} : Src 0x{1:X}, Dst 0x{2:X}, Size 0x{3:X}", ParaIdx, SourceAdr[ParaIdx].Value, DestinationAdr[ParaIdx].Value, (int)ACount[ParaIdx].Value, qdma_channel);
+                            var request = new Request(SourceAdr[ParaIdx].Value, DestinationAdr[ParaIdx].Value, (int)ACount[ParaIdx].Value, TransferType.Byte, TransferType.Byte);
+                            engine.IssueCopy(request);
+                            Irq_QDMA_Channel[qdma_channel].Set(true);
+                        }
                     }
                 }
             }
@@ -94,14 +96,14 @@ namespace Antmicro.Renode.Peripherals.DMA
         {
             for (int region = 0; region < 8; region++)
             {
-                if (idx == ParaPerRegion[region].Value)
+                if (idx == ParaPerQDMAChannel[region].Value)
                 {
                     //                    IntActiveLow8[idx].Value = IntEnableLow8[idx];
                     //                    IntActiveHigh8[idx].Value = IntEnableHigh8[idx];
                     if ((IntActiveHigh8[region].Value == 0) && (IntActiveLow8[region].Value == 0))
                     {
-                        IrqPerRegion[region].Set(false);
-                        this.Log(LogLevel.Noisy, "Interrupt off Region {0}", region);
+                        Irq_QDMA_Channel[region].Set(false);
+//                        this.Log(LogLevel.Noisy, "Interrupt off Region {0}", region);
                     }
                 }
             }
@@ -161,11 +163,11 @@ namespace Antmicro.Renode.Peripherals.DMA
 
         private IValueRegisterField[] IntActiveLow8 = new IValueRegisterField[8];
         private IValueRegisterField[] IntActiveHigh8 = new IValueRegisterField[8];
-        private IValueRegisterField[] ParaPerRegion = new IValueRegisterField[8];
-        private IValueRegisterField[] TriggerWordRegion = new IValueRegisterField[8];
-        private GPIO[] IrqPerRegion = new GPIO[8];
+        private IValueRegisterField[] ParaPerQDMAChannel = new IValueRegisterField[8];
+        private IValueRegisterField[] TriggerWordQDMAChannel = new IValueRegisterField[8];
+        private GPIO[] Irq_QDMA_Channel;
 
-        private IValueRegisterField[] ParaPerChannel = new IValueRegisterField[64];
+        private IValueRegisterField[] ParaPerDMAChannel = new IValueRegisterField[64];
         private IValueRegisterField[] TriggerWordChannel = new IValueRegisterField[64];
 
         private IValueRegisterField[] SourceAdr = new IValueRegisterField[512];
@@ -362,7 +364,7 @@ namespace Antmicro.Renode.Peripherals.DMA
             Registers.EDMA_TPCC_IECR_RN.DefineMany(dwordregisters, 8, (register, idx) =>
             {
                 register
-                    .WithValueField(0, 32, FieldMode.Read, writeCallback: (_, value) =>
+                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                         {
                             IntEnableLow8[idx] &= ~value;
                         }, name: $"EDMA_TPCC_IECR_RN_{idx}");
@@ -371,7 +373,7 @@ namespace Antmicro.Renode.Peripherals.DMA
             Registers.EDMA_TPCC_IECRH_RN.DefineMany(dwordregisters, 8, (register, idx) =>
             {
                 register
-                    .WithValueField(0, 32, FieldMode.Read, writeCallback: (_, value) =>
+                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                     {
                         IntEnableHigh8[idx] &= ~value;
                     }, name: $"EDMA_TPCC_IECRH_RN_{idx}");
@@ -380,7 +382,7 @@ namespace Antmicro.Renode.Peripherals.DMA
             Registers.EDMA_TPCC_IESR_RN.DefineMany(dwordregisters, 8, (register, idx) =>
             {
                 register
-                    .WithValueField(0, 32, FieldMode.Read, writeCallback: (_, value) =>
+                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                     {
                         IntEnableLow8[idx] |= value;
                     }, name: $"EDMA_TPCC_IESR_RN_{idx}");
@@ -389,7 +391,7 @@ namespace Antmicro.Renode.Peripherals.DMA
             Registers.EDMA_TPCC_IESRH_RN.DefineMany(dwordregisters, 8, (register, idx) =>
             {
                 register
-                    .WithValueField(0, 32, FieldMode.Read, writeCallback: (_, value) =>
+                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                     {
                         IntEnableHigh8[idx] |= value;
                     }, name: $"EDMA_TPCC_IESRH_RN_{idx}");
@@ -417,7 +419,7 @@ namespace Antmicro.Renode.Peripherals.DMA
             Registers.EDMA_TPCC_ICR_RN.DefineMany(dwordregisters, 8, (register, idx) =>
             {
                 register
-                    .WithValueField(0, 32, out IntActiveLow8[idx], FieldMode.Read, writeCallback: (_, value) =>
+                    .WithValueField(0, 32, out IntActiveLow8[idx], FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                     {
                         IntActiveLow8[idx].Value &= ~value;
                         ClearInterrupts(idx);
@@ -427,7 +429,7 @@ namespace Antmicro.Renode.Peripherals.DMA
             Registers.EDMA_TPCC_ICRH_RN.DefineMany(dwordregisters, 8, (register, idx) =>
             {
                 register
-                    .WithValueField(0, 32, out IntActiveHigh8[idx], FieldMode.Read, writeCallback: (_, value) =>
+                    .WithValueField(0, 32, out IntActiveHigh8[idx], FieldMode.Read | FieldMode.Write, writeCallback: (_, value) =>
                     {
                         IntActiveHigh8[idx].Value &= ~value;
                         ClearInterrupts(idx);
@@ -438,17 +440,16 @@ namespace Antmicro.Renode.Peripherals.DMA
             {
                 register
                     .WithValueField(0, 2, FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_QCHMAPN_reserved")
-                    .WithValueField(2, 3, out TriggerWordRegion[idx], FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_QCHMAPN_TRWORD_")
-                    .WithValueField(5, 9, out ParaPerRegion[idx], FieldMode.Read | FieldMode.Write,  name: $"EDMA_TPCC_QCHMAPN_PAENTRY_")
+                    .WithValueField(2, 3, out TriggerWordQDMAChannel[idx], FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_QCHMAPN_TRWORD_")
+                    .WithValueField(5, 9, out ParaPerQDMAChannel[idx], FieldMode.Read | FieldMode.Write,  name: $"EDMA_TPCC_QCHMAPN_PAENTRY_")
                     .WithValueField(14, 18, FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_QCHMAPN_reserved");
             }, stepInBytes: 4, resetValue: 0x00, name: "EDMA_TPCC_QCHMAPN");
 
             Registers.EDMA_TPCC_DCHMAPN.DefineMany(dwordregisters, 64, (register, idx) =>
             {
                 register
-                    .WithValueField(0, 2, FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_DCHMAPN_reserved")
-                    .WithValueField(2, 3, out TriggerWordChannel[idx], FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_DCHMAPN_TRWORD_")
-                    .WithValueField(5, 9, out ParaPerChannel[idx], FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_DCHMAPN_PAENTRY_")
+                    .WithValueField(0, 5, FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_DCHMAPN_reserved")
+                    .WithValueField(5, 9, out ParaPerDMAChannel[idx], FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_DCHMAPN_PAENTRY_")
                     .WithValueField(14, 18, FieldMode.Read | FieldMode.Write, name: $"EDMA_TPCC_DCHMAPN_reserved");
             }, stepInBytes: 4, resetValue: 0x00, name: "EDMA_TPCC_DCHMAPN");
 
@@ -491,6 +492,25 @@ namespace Antmicro.Renode.Peripherals.DMA
                 register
                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "EDMA_TPCC_LNK");
             }, stepInBytes: 0x20, resetValue: 0x00, name: "EDMA_TPCC_LNK");
+
+
+            Registers.EDMA_TPCC_BIDX.DefineMany(dwordregisters, 512, (register, idx) =>
+            {
+                register
+                   .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "EDMA_TPCC_BIDX");
+            }, stepInBytes: 0x20, resetValue: 0x00, name: "EDMA_TPCC_BIDX");
+
+            Registers.EDMA_TPCC_CIDX.DefineMany(dwordregisters, 512, (register, idx) =>
+            {
+                register
+                   .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "EDMA_TPCC_CIDX");
+            }, stepInBytes: 0x20, resetValue: 0x00, name: "EDMA_TPCC_CIDX");
+
+            Registers.EDMA_TPCC_CCNT.DefineMany(dwordregisters, 512, (register, idx) =>
+            {
+                register
+                   .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "EDMA_TPCC_CCNT");
+            }, stepInBytes: 0x20, resetValue: 0x00, name: "EDMA_TPCC_CCNT");
 
             Registers.EDMA_TPCC_IEVAL_RN.DefineMany(dwordregisters, 8, (register, idx) =>
             {
@@ -741,54 +761,57 @@ namespace Antmicro.Renode.Peripherals.DMA
             EDMA_TPCC_SRC                   = 0x4004,
             EDMA_TPCC_ABCNT                 = 0x4008,
             EDMA_TPCC_DST                   = 0x400C,
+            EDMA_TPCC_BIDX                  = 0x4010,     
             EDMA_TPCC_LNK                   = 0x4014,
-            /*
-                        EDMA_TC_PID = 0x0,
-                        EDMA_TC_TCCFG       = 0x4,
-                        EDMA_TC_SYSCONFIG   = 0x10,
-                        EDMA_TC_TCSTAT      = 0x100,
-                        EDMA_TC_INTSTAT     = 0x104,
-                        EDMA_TC_INTEN       = 0x108,
-                        EDMA_TC_INTCLR      = 0x10c,
-                        EDMA_TC_INTCMD      = 0x110,
-                        EDMA_TC_ERRSTAT     = 0x120,
-                        EDMA_TC_ERREN       = 0x124,
-                        EDMA_TC_ERRCLR      = 0x128,
-                        EDMA_TC_ERRDET      = 0x12c,
-                        EDMA_TC_ERRCMD      = 0x130,
-                        EDMA_TC_RDRATE      = 0x140,
+            EDMA_TPCC_CIDX                  = 0x4018,    
+            EDMA_TPCC_CCNT                  = 0x401C,    
+                                        /*
+                                                   EDMA_TC_PID = 0x0,
+                                                   EDMA_TC_TCCFG       = 0x4,
+                                                   EDMA_TC_SYSCONFIG   = 0x10,
+                                                   EDMA_TC_TCSTAT      = 0x100,
+                                                   EDMA_TC_INTSTAT     = 0x104,
+                                                   EDMA_TC_INTEN       = 0x108,
+                                                   EDMA_TC_INTCLR      = 0x10c,
+                                                   EDMA_TC_INTCMD      = 0x110,
+                                                   EDMA_TC_ERRSTAT     = 0x120,
+                                                   EDMA_TC_ERREN       = 0x124,
+                                                   EDMA_TC_ERRCLR      = 0x128,
+                                                   EDMA_TC_ERRDET      = 0x12c,
+                                                   EDMA_TC_ERRCMD      = 0x130,
+                                                   EDMA_TC_RDRATE      = 0x140,
 
-                        EDMA_TC_POPT        = 0x0,
-                        EDMA_TC_PSRC        = 0x4,
-                        EDMA_TC_PCNT        = 0x8,
-                        EDMA_TC_PDST        = 0xc,
-                        EDMA_TC_PBIDX       = 0x10,
-                        EDMA_TC_PMPPRXY     = 0x14,
-                        EDMA_TC_SAOPT       = 0x240,
-                        EDMA_TC_SASRC       = 0x244,
-                        EDMA_TC_SACNT       = 0x248,
-                        EDMA_TC_SADST       = 0x24c,
-                        EDMA_TC_SABIDX      = 0x250,
-                        EDMA_TC_SAMPPRXY    = 0x254,
-                        EDMA_TC_SACNTRLD    = 0x258,
-                        EDMA_TC_SASRCBREF   = 0x25c,
-                        EDMA_TC_SADSTBREF   = 0x260,
-                        EDMA_TC_DFCNTRLD    = 0x280,
-                        EDMA_TC_DFSRCBREF   = 0x284,
-                        EDMA_TC_DFDSTBREF   = 0x288,
-                        EDMA_TC_DFOPT_0     = 0x300 + (0 * 64),
-                        EDMA_TC_DFOPT_1     = 0x300 + (1 * 64),
-                        EDMA_TC_DFSRC_0     = 0x304 + (0 * 64),
-                        EDMA_TC_DFSRC_1     = 0x304 + (1 * 64),
-                        EDMA_TC_DFCNT_0     = 0x308 + (0 * 64),
-                        EDMA_TC_DFCNT_1     = 0x308 + (1 * 64),
-                        EDMA_TC_DFDST_0     = 0x30c + (0 * 64),
-                        EDMA_TC_DFDST_1     = 0x30c + (1 * 64),
-                        EDMA_TC_DFBIDX_0    = 0x310 + (0 * 64),
-                        EDMA_TC_DFBIDX_1    = 0x310 + (1 * 64),
-                        EDMA_TC_DFMPPRXY_0  = 0x314 + (0 * 64),
-                        EDMA_TC_DFMPPRXY_1  = 0x314 + (1 * 64)
-            */
+                                                   EDMA_TC_POPT        = 0x0,
+                                                   EDMA_TC_PSRC        = 0x4,
+                                                   EDMA_TC_PCNT        = 0x8,
+                                                   EDMA_TC_PDST        = 0xc,
+                                                   EDMA_TC_PBIDX       = 0x10,
+                                                   EDMA_TC_PMPPRXY     = 0x14,
+                                                   EDMA_TC_SAOPT       = 0x240,
+                                                   EDMA_TC_SASRC       = 0x244,
+                                                   EDMA_TC_SACNT       = 0x248,
+                                                   EDMA_TC_SADST       = 0x24c,
+                                                   EDMA_TC_SABIDX      = 0x250,
+                                                   EDMA_TC_SAMPPRXY    = 0x254,
+                                                   EDMA_TC_SACNTRLD    = 0x258,
+                                                   EDMA_TC_SASRCBREF   = 0x25c,
+                                                   EDMA_TC_SADSTBREF   = 0x260,
+                                                   EDMA_TC_DFCNTRLD    = 0x280,
+                                                   EDMA_TC_DFSRCBREF   = 0x284,
+                                                   EDMA_TC_DFDSTBREF   = 0x288,
+                                                   EDMA_TC_DFOPT_0     = 0x300 + (0 * 64),
+                                                   EDMA_TC_DFOPT_1     = 0x300 + (1 * 64),
+                                                   EDMA_TC_DFSRC_0     = 0x304 + (0 * 64),
+                                                   EDMA_TC_DFSRC_1     = 0x304 + (1 * 64),
+                                                   EDMA_TC_DFCNT_0     = 0x308 + (0 * 64),
+                                                   EDMA_TC_DFCNT_1     = 0x308 + (1 * 64),
+                                                   EDMA_TC_DFDST_0     = 0x30c + (0 * 64),
+                                                   EDMA_TC_DFDST_1     = 0x30c + (1 * 64),
+                                                   EDMA_TC_DFBIDX_0    = 0x310 + (0 * 64),
+                                                   EDMA_TC_DFBIDX_1    = 0x310 + (1 * 64),
+                                                   EDMA_TC_DFMPPRXY_0  = 0x314 + (0 * 64),
+                                                   EDMA_TC_DFMPPRXY_1  = 0x314 + (1 * 64)
+                                       */
         }
 
     }

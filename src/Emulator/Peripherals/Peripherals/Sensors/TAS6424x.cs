@@ -24,6 +24,15 @@ namespace Antmicro.Renode.Peripherals.Sensors
         public TAS6424x()
         {
             EnablePin = false;
+            DcLoad[0] = 4000;
+            DcLoad[1] = 4000;
+            DcLoad[2] = 4000;
+            DcLoad[3] = 4000;
+            AcLoad[0] = 15000;
+            AcLoad[1] = 15000;
+            AcLoad[2] = 15000;
+            AcLoad[3] = 15000;
+
             byteregisters = new ByteRegisterCollection(this);
 
             Registers.MODECONTROL.Define(byteregisters, 0x00, "MODECONTROL")
@@ -280,14 +289,7 @@ namespace Antmicro.Renode.Peripherals.Sensors
             SubAddress = 0x00;
             State = (int)I2CState.Idle;
             byteregisters.Reset();
-            DcLoad[0] = 4000;
-            DcLoad[1] = 4000;
-            DcLoad[2] = 4000;
-            DcLoad[3] = 4000;
-            AcLoad[0] = 15000;
-            AcLoad[1] = 15000;
-            AcLoad[2] = 15000;
-            AcLoad[3] = 15000;
+
         }
 
         public void FinishTransmission()

@@ -367,7 +367,7 @@ namespace Antmicro.Renode.Peripherals.Analog
 
             if (channel < NumberOfADCs)
                adc_values[channel] = value;
-            UpdateInterrupts();
+//            UpdateInterrupts();
         }
 
         public uint ReadAdcValue(int channel)

@@ -182,14 +182,65 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                     .WithValueField(0, 32, FieldMode.Read | FieldMode.Write,
                     writeCallback: (_, value) =>
                     {
-                        this.Log(LogLevel.Noisy, "Send Message box {0} msg 0x{1:X}", idx, value);
+                        string target="";
+                        if (idx == 0)
+                            target = "From Dsp2 To Dsp1";
+                        else if (idx == 1)
+                            target = "From Cpu0 To Dsp1";
+                        else if (idx == 2)
+                            target = "From Cpu1 To Dsp1";
+                        else if (idx == 3)
+                            target = "From Dsp1 To Dsp2";
+                        else if (idx == 4)
+                            target = "From Cpu0 To Dsp2";
+                        else if (idx == 5)
+                            target = "From Cpu1 To Dsp2";
+                        else if (idx == 6)
+                            target = "From Dsp1 To Cpu0";
+                        else if (idx == 7)
+                            target = "From Dsp2 To Cpu0";
+                        else if (idx == 8)
+                            target = "From Cpu1 To Cpu0";
+                        else if (idx == 9)
+                            target = "From Dsp1 To Cpu1";
+                        else if (idx == 10)
+                            target = "From Dsp2 To Cpu1";
+                        else if (idx == 11)
+                            target = "From Cpu0 To Cpu1";
+
+                        this.Log(LogLevel.Debug, "Send Message box {0} msg 0x{1:X} "+target, idx, value);
                         msgQueues[idx].Enqueue(value);
                         SignalNewMessage(idx);
                     },
                     valueProviderCallback: _ =>
                     {
                         var msg = msgQueues[idx].Dequeue();
-                        this.Log(LogLevel.Noisy, "Receive Message box {0} msg 0x{1:X}", idx, msg);
+                        string target = "";
+                        if (idx == 0)
+                            target = "From Dsp2 To Dsp1";
+                        else if (idx == 1)
+                            target = "From Cpu0 To Dsp1";
+                        else if (idx == 2)
+                            target = "From Cpu1 To Dsp1";
+                        else if (idx == 3)
+                            target = "From Dsp1 To Dsp2";
+                        else if (idx == 4)
+                            target = "From Cpu0 To Dsp2";
+                        else if (idx == 5)
+                            target = "From Cpu1 To Dsp2";
+                        else if (idx == 6)
+                            target = "From Dsp1 To Cpu0";
+                        else if (idx == 7)
+                            target = "From Dsp2 To Cpu0";
+                        else if (idx == 8)
+                            target = "From Cpu1 To Cpu0";
+                        else if (idx == 9)
+                            target = "From Dsp1 To Cpu1";
+                        else if (idx == 10)
+                            target = "From Dsp2 To Cpu1";
+                        else if (idx == 11)
+                            target = "From Cpu0 To Cpu1";
+                        this.Log(LogLevel.Debug, "Receive Message box {0} msg 0x{1:X} " +target, idx, msg);
                         if (msgQueues.Count == 0)
                             SignalEmptyMessage(idx);
                         return msg;

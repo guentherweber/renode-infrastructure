@@ -23,8 +23,23 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
              .WithValueField(0, 32, FieldMode.Read, name: "reserved");
 
             Registers.MMU_LOCK.Define(dwordregisters, 0x00, "IPU_MMU_REVISION")
-             .WithValueField(0, 32, FieldMode.Read, name: "reserved");
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
 
+            Registers.MMU_10.Define(dwordregisters, 0x00, "IPU_MMU_REVISION")
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+
+            Registers.MMU_1C.Define(dwordregisters, 0x00, "IPU_MMU_REVISION")
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+
+            Registers.MMU_44.Define(dwordregisters, 0x00, "IPU_MMU_REVISION")
+             .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+
+            Registers.MMU_54.DefineMany(dwordregisters, 3, (register, idx) =>
+            {
+                register
+                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+
+            }, stepInBytes: 4, resetValue: 0x00, name: "MMU_54");
         }
 
         public void Reset()
@@ -73,8 +88,12 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
         private enum Registers : long
         {
+            MMU_10 = 0x10,
             MMU_SYSSTATUS = 0x14,
-            MMU_LOCK = 50,
+            MMU_1C = 0x1C,
+            MMU_44 = 0x44,
+            MMU_LOCK = 0x50,
+            MMU_54 = 0x54
 
         }
 
