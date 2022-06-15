@@ -31,23 +31,16 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
 
             Registers.GPIO2_CLKCTRL.Define(dwordregisters, 0x01000000, "GPIO2_CLKCTRL")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write,  name: "reserved");
+                .WithValueField(0, 32, FieldMode.Read,  name: "reserved");
 
             Registers.CTRL_DUMMY1.Define(dwordregisters, 0x01, "CTRL_DUMMY1")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithValueField(0, 32, FieldMode.Read, name: "reserved");
             Registers.CTRL_DUMMY2.Define(dwordregisters, 0x01, "CTRL_DUMMY2")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithValueField(0, 32, FieldMode.Read, name: "reserved");
             Registers.DSP1_CLKSTCTRL.Define(dwordregisters, 0x00000100, "DSP1_CLKSTCTRL")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
+                .WithValueField(0, 32, FieldMode.Read, name: "reserved");
             Registers.DSP2_CLKSTCTRL.Define(dwordregisters, 0x00000100, "DSP2_CLKSTCTRL")
-                .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
-
-            Registers.CTRL_CORE_ADR0.DefineMany(dwordregisters, 0x729, (register, idx) =>
-            {
-                register
-                    .WithValueField(0, 32, FieldMode.Read | FieldMode.Write, name: "reserved");
-
-            }, stepInBytes: 4, resetValue: 0x00, name: "CTRL_CORE_ADR0");
+                .WithValueField(0, 32, FieldMode.Read, name: "reserved");
 
         }
 
@@ -99,15 +92,14 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
         private enum Registers : long
         {
-            CTRL_CORE_ADR0         = 0x0000,
             CTRL_CORE_ROM_AUXBOOT0 = 0x1CA8,
             CTRL_CORE_ROM_AUXBOOT1 = 0x1CAC,
-            CTRL_DUMMY2            = 0x3238,
-            CTRL_DUMMY1            = 0x32AC,
-            DSP1_CLKSTCTRL         = 0x3400,
-            DSP2_CLKSTCTRL         = 0x3600,
-            GPIO2_CLKCTRL          = 0x7760,
-            CM_L4PER_CLKSTCTRL     = 0x7700,
+            CM_L4PER_CLKSTCTRL = 0x7700,
+            GPIO2_CLKCTRL = 0x7760,
+            CTRL_DUMMY1 = 0x32AC,
+            CTRL_DUMMY2 = 0x3238,
+            DSP2_CLKSTCTRL=0x3600,
+            DSP1_CLKSTCTRL=0x3400,
 
         }
 
