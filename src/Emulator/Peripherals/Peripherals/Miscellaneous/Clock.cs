@@ -18,6 +18,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         public Clock(Machine machine, long clock0_Hz = 48000) 
         {
             clock0_Signal = new GPIO();
+            mach = machine;
 
             Reset();
             // Limit = Frequency [Hz] / Clock [Hz]
@@ -77,7 +78,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
         private LimitTimer ClockTimer;
         private long ClockFrequency = 48000;
-
+        private Machine mach;
 
         private void OnStateChange(bool value)
         {

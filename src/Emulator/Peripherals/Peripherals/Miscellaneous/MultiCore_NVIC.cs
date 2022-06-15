@@ -8,43 +8,39 @@
 //
 using System.Collections.Generic;
 using Antmicro.Renode.Core;
+using Antmicro.Renode.Core.Structure;
 using Antmicro.Renode.Peripherals.Bus;
 
 namespace Antmicro.Renode.Peripherals.Miscellaneous
 { 
     [AllowedTranslations(AllowedTranslation.ByteToDoubleWord)]
-    public class MultiCore_NVIC : IDoubleWordPeripheral
+    public class MultiCore_NVIC : SimpleContainer<IDoubleWordPeripheral>, IDoubleWordPeripheral
     {
-        public MultiCore_NVIC(Machine machine, IDoubleWordPeripheral nvic0, IDoubleWordPeripheral nvic1)
+        public MultiCore_NVIC(Machine machine):base(machine)
         {
-            this.machine = machine;
-            this.nvics.Add(nvic0);
-            this.nvics.Add(nvic1);
         }
 
         public uint ReadDoubleWord(long offset)
         {
-            return nvics[machine.SystemBus.GetCurrentCPUId()].ReadDoubleWord(offset);
+            IDoubleWordPeripheral nvic;
+            TryGetByAddress(machine.SystemBus.GetCurrentCPUId(), out nvic);
+            return nvic.ReadDoubleWord(offset);
         }
 
+        public override void Reset()
+        {
+            foreach (IDoubleWordPeripheral child in Children)
+            {
+                child.Reset();
+            }
+        }
 
         public void WriteDoubleWord(long offset, uint value)
         {
-            nvics[machine.SystemBus.GetCurrentCPUId()].WriteDoubleWord(offset, value);
+            IDoubleWordPeripheral nvic;
+            TryGetByAddress(machine.SystemBus.GetCurrentCPUId(), out nvic);
+            nvic.WriteDoubleWord(offset,value);
         }
-
-
-        public void Reset()
-        {
-            foreach (var name in nvics)
-            {
-                name.Reset();
-            }
-//            nvics[machine.SystemBus.GetCurrentCPUId()].Reset();
-        }
-
-        private Machine machine;
-        private List<IDoubleWordPeripheral> nvics = new List<IDoubleWordPeripheral>();
 
     }
 
