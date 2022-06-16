@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -18,7 +18,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>bin\Debug</OutputPath>
     <DefineConstants>DEBUG;$(DefineConstants)</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -47,7 +47,7 @@
     <Reference Include="WindowsBase" Condition=" $(CurrentPlatform) == 'Windows'" />
     <Reference Include="System" />
     <Reference Include="Microsoft.CSharp" />
-    <Reference Include="Mono.CSharp">
+    <Reference Include="Mono.CSharp" >
       <HintPath>..\..\..\..\..\lib\resources\libraries\mcs.dll</HintPath>
     </Reference>
     <Reference Include="Mono.Cecil">
@@ -610,5 +610,8 @@
       <Name>BigGustave</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Peripherals\Sensor\" />
+    <Folder Include="Utilities\GDB\" />
+  </ItemGroup>
 </Project>
