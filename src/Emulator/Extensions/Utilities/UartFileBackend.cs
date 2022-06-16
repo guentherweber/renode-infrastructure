@@ -1,5 +1,5 @@
 ﻿//
-// Copyright (c) 2010-2020 Antmicro
+// Copyright (c) 2010-2022 Antmicro
 //
 //  This file is licensed under the MIT License.
 //  Full license text is available in 'licenses/MIT.txt'.
@@ -52,17 +52,13 @@ namespace Antmicro.Renode.Extensions.Utilities
 
     public class UartFileBackend : IExternal, IDisposable
     {
-        public UartFileBackend(string path, IUART uart, bool immediateFlush = false)
+        public UartFileBackend(SequencedFilePath path, IUART uart, bool immediateFlush = false)
         {
-            if(Misc.AllocateFile(path, out var id))
-            {
-                Logger.LogAs(uart, LogLevel.Warning, "Previous UART output file renamed to: {0}.{1}", path, id);
-            }
-
             this.uart = uart;
             this.immediateFlush = immediateFlush;
 
-            writer = new BinaryWriter(File.Open(path, FileMode.Open));
+            // SequencedFilePath asserts that file in given path doesn't exist
+            writer = new BinaryWriter(File.Open(path, FileMode.CreateNew));
             uart.CharReceived += WriteChar;
         }
 

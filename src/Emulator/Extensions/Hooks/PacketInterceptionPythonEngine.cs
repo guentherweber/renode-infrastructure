@@ -1,5 +1,5 @@
 ﻿//
-// Copyright (c) 2010-2019 Antmicro
+// Copyright (c) 2010-2022 Antmicro
 //
 //  This file is licensed under the MIT License.
 //  Full license text is available in 'licenses/MIT.txt'.
@@ -8,16 +8,19 @@ using System;
 using Antmicro.Migrant;
 using Antmicro.Migrant.Hooks;
 using Antmicro.Renode.Core;
+using Antmicro.Renode.Logging;
 using Antmicro.Renode.Exceptions;
 using Antmicro.Renode.Peripherals;
 using Antmicro.Renode.Peripherals.Wireless;
+using Antmicro.Renode.Peripherals.CPU;
+using Antmicro.Renode.Utilities;
 using Microsoft.Scripting.Hosting;
 
 namespace Antmicro.Renode.Hooks
 {
     public class PacketInterceptionPythonEngine : PythonEngine
     {
-        public PacketInterceptionPythonEngine(IRadio radio, string script = null, string filename = null)
+        public PacketInterceptionPythonEngine(IRadio radio, string script = null, OptionalReadFilePath filename = null)
         {
             if((script == null && filename == null) || (script != null && filename != null))
             {
@@ -34,14 +37,10 @@ namespace Antmicro.Renode.Hooks
             Hook = packet =>
             {
                 Scope.SetVariable("packet", packet);
-                try
+                Execute(code, error =>
                 {
-                    source.Execute(Scope);
-                }
-                catch(Exception ex)
-                {
-                    throw new Exception("Hook execution failed: " + ex.Message);
-                }
+                    this.radio.Log(LogLevel.Error, "Python runtime error: {0}", error);
+                });
             };
         }
 
@@ -54,16 +53,18 @@ namespace Antmicro.Renode.Hooks
             Scope.SetVariable("machine", machine);
             if(script != null)
             {
-                source = Engine.CreateScriptSourceFromString(script);
+                var source = Engine.CreateScriptSourceFromString(script);
+                code = Compile(source);
             }
             else if(filename != null)
             {
-                source = Engine.CreateScriptSourceFromFile(filename);
+                var source = Engine.CreateScriptSourceFromFile(filename);
+                code = Compile(source);
             }
         }
 
         [Transient]
-        private ScriptSource source;
+        private CompiledCode code;
         private readonly string script;
         private readonly string filename;
         private readonly IRadio radio;

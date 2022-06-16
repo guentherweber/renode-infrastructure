@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -18,7 +18,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\..\..\..\output\bin\Debug\</OutputPath>
+    <OutputPath>bin\Debug</OutputPath>
     <DefineConstants>DEBUG;$(DefineConstants)</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -44,43 +44,11 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Peripherals\Analog\DRA78x_ADC.cs" />
-    <Compile Include="Peripherals\Analog\SAMD20_ADC.cs" />
-    <Compile Include="Peripherals\CAN\DRA78x_MCAN.cs" />
-    <Compile Include="Peripherals\DMA\DRA78x_EDMA_TPCC.cs" />
-    <Compile Include="Peripherals\GPIOPort\DRA78x_GPIO.cs" />
-    <Compile Include="Peripherals\GPIOPort\SAMD20_GPIO.cs" />
-    <Compile Include="Peripherals\I2C\DRA78x_I2C_Master.cs" />
-    <Compile Include="Peripherals\I2C\SAMD20_I2C_Master.cs" />
-    <Compile Include="Peripherals\Miscellaneous\Clock.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_C66.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_Dsp.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_IPC.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_Ipu_Mmu.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_Ipu_Uni_Cache.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_Module_core.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_SpinLock.cs" />
-    <Compile Include="Peripherals\Miscellaneous\DRA78x_System_Mmu.cs" />
-    <Compile Include="Peripherals\Miscellaneous\MultiCore_CPU_ID.cs" />
-    <Compile Include="Peripherals\Miscellaneous\MultiCore_NVIC.cs" />
-    <Compile Include="Peripherals\Miscellaneous\PeriodicInterrupt.cs" />
-    <Compile Include="Peripherals\Network\DRA78x_Eth.cs" />
-    <Compile Include="Peripherals\Sensors\HFDA801x.cs" />
-    <Compile Include="Peripherals\Sensors\PCM6xx0.cs" />
-    <Compile Include="Peripherals\Sensors\TAS6424x.cs" />
-    <Compile Include="Peripherals\Sound\DRA78x_McASP.cs" />
-    <Compile Include="Peripherals\SPI\DRA78x_QSPI.cs" />
-    <Compile Include="Peripherals\SPI\DRA78x_SPI.cs" />
-    <Compile Include="Peripherals\SPI\W25xxxQSPI.cs" />
-    <Compile Include="Peripherals\Timers\DRA78x_Timer.cs" />
     <Compile Include="Peripherals\Timers\EFR32_RTCC.cs" />
     <Compile Include="Peripherals\Timers\EFR32_Timer.cs" />
     <Compile Include="Peripherals\Timers\LiteX_CPUTimer.cs" />
     <Compile Include="Peripherals\Timers\LiteX_Timer.cs" />
     <Compile Include="Peripherals\Timers\LiteX_Timer_64bit.cs" />
-    <Compile Include="Peripherals\Timers\SAMD20_Timer.cs" />
-    <Compile Include="Peripherals\UART\DRA78x_UART.cs" />
-    <Compile Include="Peripherals\UART\SAMD20_UART.cs" />
     <Compile Include="Peripherals\USB\MPFS_USB.cs" />
     <Compile Include="Peripherals\USB\USBPendrive.cs" />
     <Compile Include="Peripherals\Timers\MPFS_RTC.cs" />
@@ -286,11 +254,11 @@
     <Compile Include="Peripherals\Sensors\SI70xx.cs" />
     <Compile Include="Peripherals\CPU\TranslationCPU.cs" />
     <Compile Include="Peripherals\CPU\TranslationCPU_OpcodesCounting.cs" />
+    <Compile Include="Peripherals\CPU\TranslationCPU_Profiler.cs" />
     <Compile Include="Peripherals\CPU\CpuBitness.cs" />
     <Compile Include="Peripherals\CPU\Disassembler\IDisassembler.cs" />
     <Compile Include="Peripherals\CPU\Disassembler\IDisassemblable.cs" />
     <Compile Include="Peripherals\CPU\Registers\IRegisters.cs" />
-    <Compile Include="Peripherals\CPU\CpuAbortException.cs" />
     <Compile Include="Peripherals\CPU\Registers\RegistersGroup.cs" />
     <Compile Include="Peripherals\UART\SemihostingUart.cs" />
     <Compile Include="..\Cores\Common\RegisterEnumParser.cs">
@@ -422,6 +390,9 @@
     <Compile Include="Peripherals\Miscellaneous\OpenTitan_AES.cs" />
     <Compile Include="Peripherals\Miscellaneous\OpenTitan_KeyManager.cs" />
     <Compile Include="Peripherals\Miscellaneous\OpenTitan_ResetManager.cs" />
+    <Compile Include="Peripherals\Miscellaneous\OpenTitan_LifeCycleState.cs" />
+    <Compile Include="Peripherals\Miscellaneous\OpenTitan_OneTimeProgrammableMemoryController.cs" />
+    <Compile Include="Peripherals\Miscellaneous\OpenTitan_LifeCycleController.cs" />
     <Compile Include="Peripherals\GPIOPort\IMXRT_GPIO.cs" />
     <Compile Include="Peripherals\UART\OpenTitan_UART.cs" />
     <Compile Include="Peripherals\Timers\OpenTitan_Timer.cs" />
@@ -451,6 +422,11 @@
     <Compile Include="Peripherals\UART\PL011.cs" />
     <Compile Include="Peripherals\Miscellaneous\ExternalWindowMMU.cs" />
     <Compile Include="Peripherals\Video\MusteinGenericGPU.cs" />
+    <Compile Include="Peripherals\UART\SAMD5_UART.cs" />
+    <Compile Include="Peripherals\Miscellaneous\LiteX_MMCM_CSR32.cs" />
+    <Compile Include="Peripherals\UART\SAMD20_UART.cs" />
+    <Compile Include="Peripherals\Video\LiteX_Framebuffer_CSR32.cs" />
+    <Compile Include="Peripherals\UART\USBSerialPort_S3B.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ProjectExtensions>
@@ -505,7 +481,10 @@
       <Name>crypto</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Peripherals\Miscellaneous\SiLabs\" />
+    <Folder Include="Peripherals\SPI\NORFlash\" />
+  </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\..\lib\resources\llvm\libllvm-disas.dll" />
     <None Include="..\..\..\..\..\lib\resources\llvm\libllvm-disas.so" />
@@ -514,9 +493,9 @@
   <UsingTask AssemblyFile="$(MSBuildProjectDirectory)/../../../../../lib/cctask/CCTask/bin/Release/CCTask.dll" TaskName="EnvironmentTask" />
   <Target Name="CopySharedLibraries" AfterTargets="Build">
     <PropertyGroup>
-      <Extension Condition=" '$(CurrentPlatform)' == 'Windows'">dll</Extension>
-      <Extension Condition=" '$(CurrentPlatform)' == 'Linux'">so</Extension>
-      <Extension Condition=" '$(CurrentPlatform)' == 'OSX'">dylib</Extension>
+        <Extension Condition=" '$(CurrentPlatform)' == 'Windows'">dll</Extension>
+        <Extension Condition=" '$(CurrentPlatform)' == 'Linux'"  >so</Extension>
+        <Extension Condition=" '$(CurrentPlatform)' == 'OSX'"    >dylib</Extension>
     </PropertyGroup>
     <Copy SourceFiles="..\..\..\..\..\lib\resources\llvm\libllvm-disas.$(Extension)" DestinationFiles="$(OutputPath)\libllvm-disas.$(Extension)" Condition="Exists('..\..\..\..\..\lib\resources\llvm\libllvm-disas.$(Extension)')" />
   </Target>

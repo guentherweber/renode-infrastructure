@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2018 Antmicro
+// Copyright (c) 2010-2022 Antmicro
 // Copyright (c) 2011-2015 Realtime Embedded
 //
 // This file is licensed under the MIT License.
@@ -13,6 +13,7 @@ using Antmicro.Renode.Exceptions;
 using Antmicro.Renode.Logging;
 using Antmicro.Renode.Peripherals.Bus;
 using Antmicro.Renode.UserInterface;
+using Antmicro.Renode.Utilities;
 using IronPython.Runtime;
 using Microsoft.Scripting;
 
@@ -20,7 +21,7 @@ namespace Antmicro.Renode.Peripherals.Python
 {
     public static class PythonPeripheralExtensions
     {
-        public static void PyDevFromFile(this Machine @this, string path, ulong address, int size, bool initable = false, string name = null, ulong offset = 0)
+        public static void PyDevFromFile(this Machine @this, ReadFilePath path, ulong address, int size, bool initable = false, string name = null, ulong offset = 0)
         {
             var pyDev = new PythonPeripheral(size, initable, filename: path);
             @this.SystemBus.Register(pyDev, new BusPointRegistration(address, offset));
@@ -197,21 +198,7 @@ namespace Antmicro.Renode.Peripherals.Python
 
         private void Execute()
         {
-            try
-            {
-                pythonRunner.ExecuteCode();
-            }
-            catch(Exception e)
-            {
-                if(e is SyntaxErrorException || e is UnboundNameException || e is MissingMemberException)
-                {
-                    this.Log(LogLevel.Error, "Python peripheral error: " + e.Message);
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            pythonRunner.ExecuteCode();
         }
 
         private bool inited;

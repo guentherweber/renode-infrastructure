@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2010-2020 Antmicro
+// Copyright (c) 2010-2022 Antmicro
 //
 // This file is licensed under the MIT License.
 // Full license text is available in 'licenses/MIT.txt'.
@@ -14,12 +14,13 @@ using Antmicro.Migrant.Hooks;
 using Antmicro.Migrant;
 using Antmicro.Renode.Logging;
 using Antmicro.Renode.Exceptions;
+using Antmicro.Renode.Utilities;
 
 namespace Antmicro.Renode.Hooks
 {
     public sealed class RiscVCsrPythonEngine : PythonEngine
     {
-        public RiscVCsrPythonEngine(BaseRiscV cpu, ulong csr, bool initable, string script = null, string path = null)
+        public RiscVCsrPythonEngine(BaseRiscV cpu, ulong csr, bool initable, string script = null, OptionalReadFilePath path = null)
         {
             if((script == null && path == null) || (script != null && path != null))
             {
@@ -43,7 +44,11 @@ namespace Antmicro.Renode.Hooks
                 request.value = value;
                 request.type = CsrRequest.RequestType.WRITE;
 
-                Source.Value.Execute(Scope);
+                Execute(code, error =>
+                {
+                    this.cpu.Log(LogLevel.Error, "Python runtime error: {0}", error);
+                    throw new CpuAbortException($"Python runtime error: {error}");
+                });
             };
 
             CsrReadHook = () =>
@@ -51,7 +56,11 @@ namespace Antmicro.Renode.Hooks
                 TryInit();
 
                 request.type = CsrRequest.RequestType.READ;
-                Source.Value.Execute(Scope);
+                Execute(code, error =>
+                {
+                    this.cpu.Log(LogLevel.Error, "Python runtime error: {0}", error);
+                    throw new CpuAbortException($"Python runtime error: {error}");
+                });
 
                 return request.value;
             };
@@ -67,9 +76,11 @@ namespace Antmicro.Renode.Hooks
             Scope.SetVariable("machine", cpu.GetMachine());
             Scope.SetVariable("request", request);
 
+            ScriptSource source;
+
             if(script != null)
             {
-                Source = new Lazy<ScriptSource>(() => Engine.CreateScriptSourceFromString(script));
+                source = Engine.CreateScriptSourceFromString(script);
             }
             else
             {
@@ -77,8 +88,10 @@ namespace Antmicro.Renode.Hooks
                 {
                     throw new RecoverableException($"Couldn't find the script file: {path}");
                 }
-                Source = new Lazy<ScriptSource>(() => Engine.CreateScriptSourceFromFile(path));
+                source = Engine.CreateScriptSourceFromFile(path);
             }
+
+            code = Compile(source);
         }
 
         private void TryInit()
@@ -89,7 +102,7 @@ namespace Antmicro.Renode.Hooks
             }
 
             request.type = CsrRequest.RequestType.INIT;
-            Source.Value.Execute(Scope);
+            Execute(code);
             isInitialized = true;
         }
 
@@ -98,7 +111,7 @@ namespace Antmicro.Renode.Hooks
         public Func<ulong> CsrReadHook { get; }
 
         [Transient]
-        private Lazy<ScriptSource> Source;
+        private CompiledCode code;
 
         private bool isInitialized;
 

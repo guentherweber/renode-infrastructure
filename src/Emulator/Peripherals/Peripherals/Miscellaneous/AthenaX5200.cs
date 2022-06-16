@@ -5,14 +5,16 @@
 //  Full license text is available in 'licenses/MIT.txt'.
 //
 using System;
+using System.Linq;
 using System.Numerics;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using Antmicro.Renode.Core;
 using Antmicro.Renode.Core.Structure.Registers;
+using Antmicro.Renode.Debugging;
 using Antmicro.Renode.Logging;
 using Antmicro.Renode.Peripherals.Bus;
 using Antmicro.Renode.Utilities;
-using System.Linq;
 
 namespace Antmicro.Renode.Peripherals.Miscellaneous
 {
@@ -23,6 +25,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             memoryManager = new InternalMemoryManager();
             RegistersCollection = new DoubleWordRegisterCollection(this);
             rsaServiceProvider = new RSAServiceProvider(memoryManager);
+            aesServiceProvider = new AESServiceProvider(memoryManager, machine.SystemBus);
 
             Registers.CSR.Define(this)
                 .WithFlag(0,
@@ -77,6 +80,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 { JumpTable.ModularExponentationRSA, rsaServiceProvider.ModularExponentation },
                 { JumpTable.ModularReductionRSA, rsaServiceProvider.ModularReduction },
                 { JumpTable.DecryptCipherRSA, rsaServiceProvider.DecryptData },
+                { JumpTable.RunAES, aesServiceProvider.PerformAESOperation },
+                { JumpTable.RunAES_DMA, aesServiceProvider.PerformAESOperationDMA },
             };
 
             Reset();
@@ -154,6 +159,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
         private readonly IEnumRegisterField<JumpTable> operation;
         private readonly IFlagRegisterField coreExecuteCommand;
         private readonly RSAServiceProvider rsaServiceProvider;
+        private readonly AESServiceProvider aesServiceProvider;
 
         private class InternalMemoryManager
         {
@@ -161,14 +167,14 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             {
                 coreMemories = new Dictionary<long, InternalMemoryAccessor>
                 {
-                    { 0x0, new InternalMemoryAccessor(BERLength, "BER_BE", isLittleEndian: false) },
-                    { 0x1, new InternalMemoryAccessor(MMRLength, "MMR_BE", isLittleEndian: false) },
-                    { 0x2, new InternalMemoryAccessor(TSRLength, "TSR_BE", isLittleEndian: false) },
-                    { 0x3, new InternalMemoryAccessor(FPRLength, "FPR_BE", isLittleEndian: false) },
-                    { 0x8, new InternalMemoryAccessor(BERLength, "BER_LE") },
-                    { 0x9, new InternalMemoryAccessor(MMRLength, "MMR_LE") },
-                    { 0xA, new InternalMemoryAccessor(TSRLength, "TSR_LE") },
-                    { 0xB, new InternalMemoryAccessor(FPRLength, "FPR_LE") }
+                    { 0x0, new InternalMemoryAccessor(BERLength, "BER_BE", Endianness.BigEndian) },
+                    { 0x1, new InternalMemoryAccessor(MMRLength, "MMR_BE", Endianness.BigEndian) },
+                    { 0x2, new InternalMemoryAccessor(TSRLength, "TSR_BE", Endianness.BigEndian) },
+                    { 0x3, new InternalMemoryAccessor(FPRLength, "FPR_BE", Endianness.BigEndian) },
+                    { 0x8, new InternalMemoryAccessor(BERLength, "BER_LE", Endianness.LittleEndian) },
+                    { 0x9, new InternalMemoryAccessor(MMRLength, "MMR_LE", Endianness.LittleEndian) },
+                    { 0xA, new InternalMemoryAccessor(TSRLength, "TSR_LE", Endianness.LittleEndian) },
+                    { 0xB, new InternalMemoryAccessor(FPRLength, "FPR_LE", Endianness.LittleEndian) }
                 };
             }
 
@@ -246,9 +252,9 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
         private class InternalMemoryAccessor
         {
-            public InternalMemoryAccessor(uint size, string name, bool isLittleEndian = true)
+            public InternalMemoryAccessor(uint size, string name, Endianness endianness)
             {
-                this.isLittleEndian = isLittleEndian;
+                this.endianness = endianness;
                 internalMemory = new byte[size];
                 Name = name;
             }
@@ -260,7 +266,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                     Logger.Log(LogLevel.Error, "Trying to read outside of {0} internal memory, at offset 0x{1:X}", Name, offset);
                     return 0;
                 }
-                var result = BitHelper.ToUInt32(internalMemory, (int)offset, 4, false);
+                var result = BitHelper.ToUInt32(internalMemory, (int)offset, 4, endianness == Endianness.LittleEndian);
                 Logger.Log(LogLevel.Debug, "Read value 0x{0:X} from memory {1} at offset 0x{2:X}", result, Name, offset);
                 return result;
             }
@@ -286,7 +292,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                     return;
                 }
                 Logger.Log(LogLevel.Debug, "Writing value 0x{0:X} to memory {1} at offset 0x{2:X}", value, Name, offset);
-                foreach(var b in BitHelper.GetBytesFromValue(value, sizeof(uint), isLittleEndian))
+
+                foreach(var b in BitHelper.GetBytesFromValue(value, sizeof(uint), false))
                 {
                     internalMemory[offset] = b;
                     ++offset;
@@ -299,10 +306,6 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 {
                     Logger.Log(LogLevel.Error, "Trying to write {0] bytes outside of {1} internal memory, at offset 0x{2:X}", bytes.Length, Name, offset);
                     return;
-                }
-                if(!isLittleEndian)
-                {
-                    bytes = ChangeEndianness(bytes);
                 }
                 foreach(var b in bytes)
                 {
@@ -321,22 +324,7 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
 
             public string Name { get; }
 
-            private byte[] ChangeEndianness(byte[] bytes)
-            {
-                for(var i = 0; i < bytes.Length / 4; ++i)
-                {
-                    var temp = bytes[(i * 4) + 3];
-                    bytes[(i * 4) + 3] = bytes[(i * 4) + 0];
-                    bytes[(i * 4) + 0] = temp;
-
-                    temp = bytes[(i * 4) + 2];
-                    bytes[(i * 4) + 2] = bytes[(i * 4) + 1];
-                    bytes[(i * 4) + 1] = temp;
-                }
-                return bytes;
-            }
-
-            private readonly bool isLittleEndian;
+            private readonly Endianness endianness;
             private readonly byte[] internalMemory;
         }
 
@@ -425,7 +413,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 var operand = CreateBigInteger((RSARegisters)baseAddress, modulusLength);
                 var result = BigInteger.ModPow(operand, e, n);
 
-                manager.TryWriteBytes(baseAddress, result.ToByteArray());
+                var resultBytes = Helpers.ChangeEndianness(result.ToByteArray());
+                manager.TryWriteBytes(baseAddress, resultBytes);
             }
 
             public void ModularReduction()
@@ -437,7 +426,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 var a = CreateBigInteger(RSARegisters.Operand, operandLength);
                 var result = a % n;
 
-                manager.TryWriteBytes((long)RSARegisters.Operand, result.ToByteArray());
+                var resultBytes = Helpers.ChangeEndianness(result.ToByteArray());
+                manager.TryWriteBytes((long)RSARegisters.Operand, resultBytes);
             }
 
             public void DecryptData()
@@ -475,7 +465,8 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
                 // m = m2 + h * q
                 var m = m2 + h * q;
 
-                manager.TryWriteBytes((long)RSARegisters.BaseAddress, m.ToByteArray());
+                var mBytes = Helpers.ChangeEndianness(m.ToByteArray());
+                manager.TryWriteBytes((long)RSARegisters.BaseAddress, mBytes);
             }
 
             private BigInteger CreateBigInteger(RSARegisters register, uint wordCount)
@@ -522,14 +513,140 @@ namespace Antmicro.Renode.Peripherals.Miscellaneous
             }
         }
 
+        private class AESServiceProvider
+        {
+            public AESServiceProvider(InternalMemoryManager manager, SystemBus bus)
+            {
+                this.manager = manager;
+                this.bus = bus;
+            }
+
+            public void PerformAESOperation()
+            {
+                manager.TryReadBytes((long)AESRegisters.Key, KeyLengthByteCount, out var keyBytes);
+                manager.TryReadBytes((long)AESRegisters.InitVector, InitializationVectorByteCount, out var ivBytes);
+                manager.TryReadBytes((long)AESRegisters.InputData, InputDataByteCount, out var inputBytes);
+                manager.TryReadDoubleWord((long)AESRegisters.Config, out var config);
+                var operation = BitHelper.IsBitSet(config, 0)
+                       ? Operation.Decryption
+                       : Operation.Encryption;
+
+                // The memory in which Key bytes are stored is little-endian, but both Encryptor and Decryptor require big-endian data
+                keyBytes = Helpers.ChangeEndianness(keyBytes);
+                var result = GetResultBytes(keyBytes, ivBytes, inputBytes, operation);
+
+                manager.TryWriteBytes((long)AESRegisters.Cipher, result);
+            }
+
+            public void PerformAESOperationDMA()
+            {
+                manager.TryReadBytes((long)AESRegisters.Key, KeyLengthByteCount, out var keyBytes);
+                manager.TryReadBytes((long)AESRegisters.InitVectorDMA, InitializationVectorByteCount, out var ivBytes);
+                manager.TryReadDoubleWord((long)AESRegisters.InputDataAddrDMA, out var inputDataAddr);
+                manager.TryReadDoubleWord((long)AESRegisters.ResultDataAddrDMA, out var resultDataAddr);
+                manager.TryReadDoubleWord((long)AESRegisters.ConfigDMA, out var config);
+                var operation = BitHelper.IsBitSet(config, 0)
+                       ? Operation.Decryption
+                       : Operation.Encryption;
+
+                // The memory in which Key bytes are stored is little-endian, but both Encryptor and Decryptor require big-endian data
+                keyBytes = Helpers.ChangeEndianness(keyBytes);
+                bus.WriteBytes(GetResultBytes(keyBytes, ivBytes, bus.ReadBytes(inputDataAddr, CipherByteCount), operation), resultDataAddr);
+            }
+
+            private byte[] GetResultBytes(byte[] keyBytes, byte[] ivBytes, byte[] inputBytes, Operation operation)
+            {
+                return operation == Operation.Encryption
+                    ? Encryption(keyBytes, ivBytes, inputBytes)
+                    : Decryption(keyBytes, ivBytes, inputBytes);
+            }
+
+            private byte[] Encryption(byte[] key, byte[] iv, byte[] input)
+            {                
+                using(var aes = Aes.Create())
+                using(var encryptor = aes.CreateEncryptor(key, iv))
+                {
+                    return encryptor.TransformFinalBlock(input, 0, input.Length);
+                }
+            }
+
+            private byte[] Decryption(byte[] key, byte[] iv, byte[] input)
+            {
+                using(var aes = Aes.Create())
+                {
+                    aes.Padding = PaddingMode.None;
+                    using(var encryptor = aes.CreateDecryptor(key, iv))
+                    {
+                        return encryptor.TransformFinalBlock(input, 0, input.Length);
+                    }
+                }
+            }
+
+            private readonly SystemBus bus;
+            private readonly InternalMemoryManager manager;
+
+            // These values are taken directly from the driver because they are not written to the internal memories
+            private const int KeyLengthByteCount = 32;
+            private const int InitializationVectorByteCount = 16;
+            private const int InputDataByteCount = 16;
+            private const int CipherByteCount = 16;
+
+            private enum Operation
+            {
+                Encryption,
+                Decryption
+            }
+
+            private enum AESRegisters
+            {
+                Config = 0x20,
+                InputDataAddrDMA = 0x28,
+                ResultDataAddrDMA = 0x2C,
+                ConfigDMA = 0x3C,
+                InitVector = 0x8024,
+                InitVectorDMA = 0x8040,
+                Cipher = 0x8048,
+                InputData = 0x8058,
+                Key = 0x9000,
+            }
+        }
+
+        private static class Helpers
+        {
+            public static byte[] ChangeEndianness(byte[] bytes)
+            {
+                DebugHelper.Assert(bytes.Length % 4 == 0);
+
+                for(var i = 0; i < bytes.Length / 4; ++i)
+                {
+                    var temp = bytes[(i * 4) + 3];
+                    bytes[(i * 4) + 3] = bytes[(i * 4) + 0];
+                    bytes[(i * 4) + 0] = temp;
+
+                    temp = bytes[(i * 4) + 2];
+                    bytes[(i * 4) + 2] = bytes[(i * 4) + 1];
+                    bytes[(i * 4) + 1] = temp;
+                }
+                return bytes;
+            }
+        }
+
+        private enum Endianness
+        {
+            BigEndian,
+            LittleEndian
+        }
+        
         private enum JumpTable
         {
             // gaps in addressing - only a few commands are implemented
             PrecomputeValueRSA = 0x0,
             ModularExponentationRSA = 0x2,
             ModularReductionRSA = 0x12,
+            RunAES = 0x20,
             InstantiateDRBG = 0x2C,
             GenerateBlocksFromDRBG = 0x30,
+            RunAES_DMA = 0x38,
             UninstantiateDRBG = 0x32,
             DecryptCipherRSA = 0x4E,
             DetectFirmwareVersion = 0x5A

@@ -12,6 +12,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.ExceptionServices;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using Antmicro.Migrant;
@@ -40,7 +42,7 @@ namespace Antmicro.Renode.Peripherals.CPU
         public Endianess Endianness { get; protected set; }
 
         protected TranslationCPU(string cpuType, Machine machine, Endianess endianness, CpuBitness bitness = CpuBitness.Bits32)
-		: this(0, cpuType, machine, endianness, bitness)
+        : this(0, cpuType, machine, endianness, bitness)
         {
         }
 
@@ -186,7 +188,7 @@ namespace Antmicro.Renode.Peripherals.CPU
 
         private bool logTranslationBlockFetchEnabled;
 
-        public ulong ExecutedInstructions { get; private set; }
+        public ulong ExecutedInstructions { get {return TlibGetTotalExecutedInstructions(); } }
 
         public int Slot { get{if(!slot.HasValue) slot = machine.SystemBus.GetCPUId(this); return slot.Value;} private set {slot = value;} }
         private int? slot;
@@ -217,7 +219,19 @@ namespace Antmicro.Renode.Peripherals.CPU
             var registerInfos = properties.Where(x => x.CanRead && x.GetCustomAttributes(false).Any(y => y is RegisterAttribute));
             foreach(var registerInfo in registerInfos)
             {
-                result.Add(registerInfo.Name, (ulong)((dynamic)registerInfo.GetGetMethod().Invoke(this, null)));
+                try
+                {
+                    result.Add(registerInfo.Name, (ulong)((dynamic)registerInfo.GetGetMethod().Invoke(this, null)));
+                }
+                catch(TargetInvocationException ex)
+                {
+                    if(!(ex.InnerException is RegisterValueUnavailableException))
+                    {
+                        // Something actually went wrong, unwrap exception
+                        ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                    }
+                    // Otherwise value is not available, ignore
+                }
             }
 
             //every field that is IRegister, contains properties interpreted as registers.
@@ -477,6 +491,7 @@ namespace Antmicro.Renode.Peripherals.CPU
             HandleRamSetup();
             TlibReset();
             ResetOpcodesCounters();
+            profiler?.Dispose();
         }
 
         public bool RequestTranslationBlockRestart()
@@ -583,6 +598,11 @@ namespace Antmicro.Renode.Peripherals.CPU
             LogFunctionNames(value, string.Empty, removeDuplicates);
         }
 
+        public ulong GetCurrentInstructionsCount()
+        {
+            return TlibGetTotalExecutedInstructions();
+        }
+
         public void LogFunctionNames(bool value, string spaceSeparatedPrefixes = "", bool removeDuplicates = false)
         {
             if(!value)
@@ -676,7 +696,7 @@ namespace Antmicro.Renode.Peripherals.CPU
 
         public void AddHookAtInterruptEnd(Action<ulong> hook)
         {
-            if(Architecture != "riscv")
+            if(!Architecture.Contains("riscv"))
             {
                 throw new RecoverableException("Hooks at the end of interrupt are supported only in the RISC-V architecture");
             }
@@ -1242,6 +1262,7 @@ namespace Antmicro.Renode.Peripherals.CPU
         public virtual void Dispose()
         {
             DisposeInner();
+            profiler?.Dispose();
         }
 
         void DisposeInner(bool silent = false)
@@ -1840,7 +1861,7 @@ namespace Antmicro.Renode.Peripherals.CPU
         //The debug mode disables interrupt handling in the emulated CPU
         //Additionally, some instructions, suspending execution, until an interrupt arrives (e.g. HLT on x86 or WFI on ARM) are treated as NOP
         public virtual bool ShouldEnterDebugMode
-        { 
+        {
             get => shouldEnterDebugMode;
             set
             {
@@ -2003,10 +2024,10 @@ namespace Antmicro.Renode.Peripherals.CPU
 
         [Import]
         private Action TlibCleanWfiProcState;
-        
+
         [Import]
         private ActionUInt64 TlibSetPageIoAccessed;
-        
+
         [Import]
         private ActionUInt64 TlibClearPageIoAccessed;
 
@@ -2132,7 +2153,7 @@ namespace Antmicro.Renode.Peripherals.CPU
             {
                 addr = translatedAddr;
             }
-            
+
             var opcodes = Bus.ReadBytes(addr, (int)blockSize, true, context: this);
             Disassembler.DisassembleBlock(addr, opcodes, flags, out var result);
             return result;
@@ -2140,7 +2161,7 @@ namespace Antmicro.Renode.Peripherals.CPU
 
         [Transient]
         private LLVMDisassembler disassembler;
-        
+
         public LLVMDisassembler Disassembler => disassembler;
 
         protected static readonly Exception InvalidInterruptNumberException = new InvalidOperationException("Invalid interrupt number.");
@@ -2304,7 +2325,6 @@ namespace Antmicro.Renode.Peripherals.CPU
                 this.Trace($"Asking CPU to execute {toExecute} instructions");
                 var result = ExecuteInstructions(toExecute, out var executed);
                 this.Trace($"CPU executed {executed} instructions and returned {result}");
-                ExecutedInstructions = TlibGetTotalExecutedInstructions();
                 machine.Profiler?.Log(new InstructionEntry((byte)Id, ExecutedInstructions));
 
                 ReportProgress(executed);
@@ -2333,7 +2353,7 @@ namespace Antmicro.Renode.Peripherals.CPU
                     {
                         this.Trace();
                         var instructionsToSkip = Math.Min(InstructionsToNearestLimit(), instructionsLeftThisRound);
-                        
+
                         if(!machine.LocalTimeSource.AdvanceImmediately)
                         {
                             var intervalToSleep = TimeInterval.FromCPUCycles(instructionsToSkip, PerformanceInMips, out var unused).ToTimeSpan();
@@ -2344,7 +2364,7 @@ namespace Antmicro.Renode.Peripherals.CPU
                                 instructionsToSkip = TimeInterval.FromTimeSpan(intervalSlept).ToCPUCycles(PerformanceInMips, out var _);
                             }
                         }
-                        
+
                         ReportProgress(instructionsToSkip);
                     }
                     else
